@@ -1,93 +1,177 @@
-# parflowluminolateralflow
+ParFlow
+============
+
+ParFlow is an open-source, modular, parallel watershed flow model. It
+includes fully-integrated overland flow, the ability to simulate
+complex topography, geology and heterogeneity and coupled land-surface
+processes including the land-energy budget, biogeochemistry and snow
+(via CLM). It is multi-platform and runs with a common I/O structure
+from laptop to supercomputer. ParFlow is the result of a long,
+multi-institutional development history and is now a collaborative
+effort between CSM, LLNL, UniBonn and UCB. ParFlow has been coupled to
+the mesoscale, meteorological code ARPS and the NCAR code WRF.
+
+See the "User's Manual" for info on "Getting Started" in ParFlow.
+
+To cite Parflow, please use the following reference:
+
+Citing Parflow
+--------------
+
+If you use ParFlow in a publication, please cite the these papers that describe model physics:
+
+* Ashby S.F. and R.D. Falgout, Nuclear Science and Engineering 124:145-159, 1996
+* Jones, J.E. and C.S. Woodward, Advances in Water Resources 24:763-774, 2001
+* Kollet, S.J. and R.M. Maxwell, Advances in Water Resources 29:945-958, 2006
+* Maxwell, R.M. Advances in Water Resources 53:109-117, 2013
+
+If you use ParFlow coupled to CLM in a publication, please also cite
+two additional papers that describe the coupled model physics:
+* Maxwell, R.M. and N.L. Miller, Journal of Hydrometeorology 6(3):233-247, 2005
+* Kollet, S.J. and R.M. Maxwell, Water Resources Research 44:W02402, 2008
+
+Additional Parflow resources
+----------------------------
+
+You can join the Parflow mailing list to communicate with the Parflow
+developers and users.  Join our mailing list over via:
+- [Parflow-Users](https://mailman.mines.edu/mailman/listinfo/parflow-users)
+
+A Parflow blog is available with notes from users on how to compile and use Parflow:
+- [Parflow Blog](http://parflow.blogspot.com/)
+
+To report Parflow bugs, please use the GitHub issue tracker for Parflow:
+- [Parflow Issue Tracker](https://github.com/parflow/parflow/issues)
+
+Quick Start
+-----------
+
+Parflow uses a configure/make system based on the standard GNU
+autoconf configure system.  Parflow is composed of two main components
+that are configured and built seperately.  The main Parflow executable
+is built first then a set of TCL libraries are built.  TCL is used
+for running Parflow.  Since some MPP architectures use different
+processors/OS/compilers for the compute nodes and login nodes Parflow
+supports building the main simulation executable with different
+compilers than the TCL libraries used for problem setup.
+
+Step 1: Setup
+-------------
+
+Decide where you wish to install Parflow and associated libraries.
+
+Set the environment variable PARFLOW_DIR to your chosen location:
+
+for csh and tcsh users:
+
+   setenv PARFLOW_DIR /home/snoopy/parflow
+
+or for bash users:
+
+   export PARFLOW_DIR=/home/snoopy/parflow
+
+Step 2: Extract the Source
+--------------------------
+
+Extract the source files from the compressed tar file.
+
+   mkdir ~/parflow 
+   cd ~/parflow 
+   gunzip ../parflow.tar.Z 
+   tar -xvf ../parflow.tar
 
 
+Step 3: Build and install Parflow
+---------------------------------
 
-## Getting started
+This step builds the Parflow library and executable.  The library is
+used when Parflow is used as a component of another simulation
+(e.g. WRF).  
 
-To make it easy for you to get started with GitLab, here's a list of recommended next steps.
+   cd $PARFLOW_DIR
+   cd pfsimulator
+   ./configure --prefix=$PARFLOW_DIR --with-amps=mpi1
+   make 
+   make install
 
-Already a pro? Just edit this README.md and make it your own. Want to make it easy? [Use the template at the bottom](#editing-this-readme)!
+This will build a parallel version of Parflow using MPI libraries.
 
-## Add your files
+You can control build options for Parflow, use
 
-- [ ] [Create](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#create-a-file) or [upload](https://docs.gitlab.com/ee/user/project/repository/web_editor.html#upload-a-file) files
-- [ ] [Add files using the command line](https://docs.gitlab.com/topics/git/add_files/#add-files-to-a-git-repository) or push an existing Git repository with the following command:
+   ./configure --help 
 
-```
-cd existing_repo
-git remote add origin https://icg4geo.icg.kfa-juelich.de/skollet/parflowluminolateralflow.git
-git branch -M main
-git push -uf origin main
-```
+to see other configure options.
 
-## Integrate with your tools
+To compile with CLM add '--with-clm' to the configure line
 
-- [ ] [Set up project integrations](https://icg4geo.icg.kfa-juelich.de/skollet/parflowluminolateralflow/-/settings/integrations)
+To change compilers used, set the CC, FC and F77 variables. For example to use Intel compilers:
 
-## Collaborate with your team
+   setenv CC icc
+   setenv FC ifort
+   setenv F77 ifort
 
-- [ ] [Invite team members and collaborators](https://docs.gitlab.com/ee/user/project/members/)
-- [ ] [Create a new merge request](https://docs.gitlab.com/ee/user/project/merge_requests/creating_merge_requests.html)
-- [ ] [Automatically close issues from merge requests](https://docs.gitlab.com/ee/user/project/issues/managing_issues.html#closing-issues-automatically)
-- [ ] [Enable merge request approvals](https://docs.gitlab.com/ee/user/project/merge_requests/approvals/)
-- [ ] [Set auto-merge](https://docs.gitlab.com/user/project/merge_requests/auto_merge/)
+Many MPI distributions supply compiler wrappers (e.g. mpicc), simply
+specify the wrapper name for the appropriate compiler variable.
 
-## Test and Deploy
+Note that Parflow defaults to building a sequential version so
+"--with-amps" is needed when building for a parallel computer.  You
+can explicitly specify the MPI to use by using the provided compiler
+wrapper (e.g. mpicc) or by specifying a path to the MPI install using
+the "--with-mpi" option to configure.
 
-Use the built-in continuous integration in GitLab.
 
-- [ ] [Get started with GitLab CI/CD](https://docs.gitlab.com/ee/ci/quick_start/)
-- [ ] [Analyze your code for known vulnerabilities with Static Application Security Testing (SAST)](https://docs.gitlab.com/ee/user/application_security/sast/)
-- [ ] [Deploy to Kubernetes, Amazon EC2, or Amazon ECS using Auto Deploy](https://docs.gitlab.com/ee/topics/autodevops/requirements.html)
-- [ ] [Use pull-based deployments for improved Kubernetes management](https://docs.gitlab.com/ee/user/clusters/agent/)
-- [ ] [Set up protected environments](https://docs.gitlab.com/ee/ci/environments/protected_environments.html)
+Step 4: Build and install pftools
+---------------------------------
 
-***
+pftools is a package of utilities and a TCL library that is used to
+setup and postprocess Parflow files.  The input files to Parflow are
+TCL scripts so TCL must be installed on the system.
 
-# Editing this README
+A typical configure and build looks like:
 
-When you're ready to make this README your own, just edit this file and use the handy template below (or feel free to structure it however you want - this is just a starting point!). Thanks to [makeareadme.com](https://www.makeareadme.com/) for this template.
+  cd pftools
+  ./configure --prefix=$PARFLOW_DIR --with-amps=mpi1
+  make 
+  make install
+  make doc_install
 
-## Suggestions for a good README
+Note that pftools is NOT parallel but some options for how files are
+written are based on the communication layer so pftools needs to know
+what what used to build the Parflow library.  Use the same
+--with-amps=<amps-option> as was used to build the main executable.
 
-Every project is different, so consider which of these sections apply to yours. The sections used in the template are suggestions for most open source projects. Also keep in mind that while a README can be too long and detailed, too long is better than too short. If you think your README is too long, consider utilizing another form of documentation rather than cutting out information.
+If TCL is not installed in the system locations (/usr or /usr/local)
+you need to specify the path with the "--with-tcl=<PATH> configure
+option.
 
-## Name
-Choose a self-explaining name for your project.
+See "./configure --help" for additional configure options for pftools.
 
-## Description
-Let people know what your project can do specifically. Provide context and add a link to any reference visitors might be unfamiliar with. A list of Features or a Background subsection can also be added here. If there are alternatives to your project, this is a good place to list differentiating factors.
 
-## Badges
-On some READMEs, you may see small images that convey metadata, such as whether or not all the tests are passing for the project. You can use Shields to add some to your README. Many services also have instructions for adding a badge.
+Step 5: Running a sample problem
+--------------------------------
 
-## Visuals
-Depending on what you are making, it can be a good idea to include screenshots or even a video (you'll frequently see GIFs rather than actual videos). Tools like ttygif can help, but check out Asciinema for a more sophisticated method.
+If all went well a sample Parflow problem can be run using:
 
-## Installation
-Within a particular ecosystem, there may be a common way of installing things, such as using Yarn, NuGet, or Homebrew. However, consider the possibility that whoever is reading your README is a novice and would like more guidance. Listing specific steps helps remove ambiguity and gets people to using your project as quickly as possible. If it only runs in a specific context like a particular programming language version or operating system or has dependencies that have to be installed manually, also add a Requirements subsection.
+cd test
+tclsh default_single.pftcl
 
-## Usage
-Use examples liberally, and show the expected output if you can. It's helpful to have inline the smallest example of usage that you can demonstrate, while providing links to more sophisticated examples if they are too long to reasonably include in the README.
+Note that PAFLOW_DIR must be set for this to work and it assume tclsh
+is in your path.  Make sure to use the same TCL as was used in the
+pftools configure.
 
-## Support
-Tell people where they can go to for help. It can be any combination of an issue tracker, a chat room, an email address, etc.
 
-## Roadmap
-If you have ideas for releases in the future, it is a good idea to list them in the README.
+Release
+-------
 
-## Contributing
-State if you are open to contributions and what your requirements are for accepting them.
+Copyright (c) 1995-2009, Lawrence Livermore National Security LLC. 
 
-For people who want to make changes to your project, it's helpful to have some documentation on how to get started. Perhaps there is a script that they should run or some environment variables that they need to set. Make these steps explicit. These instructions could also be useful to your future self.
+Produced at the Lawrence Livermore National Laboratory. 
 
-You can also document commands to lint the code or run tests. These steps help to ensure high code quality and reduce the likelihood that the changes inadvertently break something. Having instructions for running tests is especially helpful if it requires external setup, such as starting a Selenium server for testing in a browser.
+Written by the Parflow Team (see the CONTRIBUTORS file)
 
-## Authors and acknowledgment
-Show your appreciation to those who have contributed to the project.
+CODE-OCEC-08-103. All rights reserved.
 
-## License
-For open source projects, say how it is licensed.
+Parflow is released under the GNU General Public License version 2.1
 
-## Project status
-If you have run out of energy or time for your project, put a note at the top of the README saying that development has slowed down or stopped completely. Someone may choose to fork your project or volunteer to step in as a maintainer or owner, allowing your project to keep going. You can also make an explicit request for maintainers.
+For details and restrictions, please read the LICENSE.txt file.
+- [LICENSE](./LICENSE.txt)
