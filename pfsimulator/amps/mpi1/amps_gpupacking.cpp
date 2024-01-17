@@ -623,7 +623,6 @@ int amps_gpupacking(int action, amps_Invoice inv, int inv_num, char **buffer_out
     }
 #endif
     /* Run packing or unpacking kernel */
-    // using MDPolicyType_3D = typename Kokkos::Experimental::MDRangePolicy<Kokkos::Experimental::Rank<3> >;
     using MDPolicyType_3D = typename Kokkos::MDRangePolicy<Kokkos::Rank<3> >;
     MDPolicyType_3D mdpolicy_3d({{0, 0, 0}}, {{len_x, len_y, len_z}});
     
