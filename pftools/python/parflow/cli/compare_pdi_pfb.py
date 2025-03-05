@@ -1,30 +1,42 @@
 # ______________________________________________________________________________
 #
-# This script compares the pbf and pdi files
+# This script compares the pdi and pfb files
 # ______________________________________________________________________________
 
 import h5py as h5py
 import numpy as np
-import sys
 import struct
 import glob
+import argparse
+import traceback
 
-# ______________________________________________________________________________
-# Functions
 
 def compare_files(name):
+    """
+        Compares PDI (HDF5) files with PFB binary files for a given base name.
 
-    print("")
-    print(" _______________________________ ")
-    print(" Analyze {}".format(name))
-    print("")
+        This function processes all PDI files in HDF5 format that match the
+        given base name, extracts relevant data, and compares it against the
+        corresponding PFB binary file.
+        The comparison includes checking subvectors and applying optional
+        tolerance thresholds.
 
-    files = sorted(glob.glob(name + '*.h5*'))
-    
-    print(files)
+        Args:
+            name (str): The base name of the files (excluding extensions).
 
-    f = h5py.File(files[0], "r")
+        Returns:
+            None: Prints the data comparison results, including any detected errors.
+    """
+    print(f"\n_______________________________ \nStart analysis for base name: {name} \n")
+    # Find HDF5 files
+    hdf5_files = sorted(glob.glob(f"{name}*.h5*"))
+    print(f"HDF5 files: {hdf5_files}")
+    if not hdf5_files:
+        print(f"\nError: No HDF5 files found for '{name}'.\n")
+        return
 
+    # Extract metadata
+    f = h5py.File(hdf5_files[0], "r")
     vector_data = f['vector_data']
     subvectors = vector_data['subvectors']
     subgrids = vector_data['grid']['subgrids']
@@ -46,23 +58,35 @@ def compare_files(name):
     drop_tolerance = np.array(f['drop_tolerance'])
     with_tolerance = np.array(f['with_tolerance'])
 
+    # Find PFB files
+    if (with_tolerance <= 0):
+        binary_files = sorted(glob.glob(name + '*.pfb'))
+    else:
+        binary_files = sorted(glob.glob(f"{name}.pfsb"))
+
+    if not binary_files:
+        print(f"\nError: No binary PFB/PFSB files found for '{name}'.\n")
+        return
+    
+    print(f"\nPF Binary files: {binary_files}")
+
+    # ___________________________________________________________________________
+    # HDF5 File Processing
+    # ___________________________________________________________________________
+
+    print(f"\n_______________________________ \nAnalyzing PDI Files\n")
+    print(" Metadata: {}".format(len(subvectors)))
     print(" Number of subvectors from PDI: {}".format(len(subvectors)))
     print(" X: {}, Y: {}, Z: {}".format(X,Y,Z))
     print(" NX: {}, NY: {}, NZ: {}".format(NX,NY,NZ))
     print(" DX: {}, DY: {}, DZ: {}".format(DX,DY,DZ))
     print(" drop_tolerance: {}".format(drop_tolerance))
     print(" with_tolerance: {}".format(with_tolerance))
-
     pdi_subvectors = []
-
-    for file in files:
-        
-        print(" File: {}".format(file))
-        
+    for file in hdf5_files:
+        print("\nFile: {}".format(file))
         f = h5py.File(file, "r")
-
         for igrid,subvector in enumerate(subvectors):
-
             d = {}
             d['ix'] = subregions[igrid]['ix'][0]
             d['iy'] = subregions[igrid]['iy'][0]
@@ -84,17 +108,13 @@ def compare_files(name):
             d['ny_v'] = subvector['data_space']['ny']
             d['nz_v'] = subvector['data_space']['nz']
             
-            yinc = d['nx_v'] - d['nx'];
-            zinc = d['nx_v']  * d['ny_v']  - d['ny'] * d['nx_v'];
+            yinc = d['nx_v'] - d['nx']
+            zinc = d['nx_v']  * d['ny_v']  - d['ny'] * d['nx_v']
             
             if (with_tolerance <= 0):
-                
                 num_elements = d['nx']*d['ny']*d['nz']
-                
                 first_index = ((d['ix'] - d['ix_v']) + ((d['iy'] - d['iy_v']) + (d['iz'] - d['iz_v']) * d['ny_v']) * d['nx_v'])
-                
                 d['data'] = np.zeros([d['nx'],d['ny'],d['nz']])
-                
                 k = first_index
                 for iz in range(d['iz'],d['iz']+d['nz']):
                     for iy in range(d['iy'],d['iy']+d['ny']):
@@ -102,10 +122,8 @@ def compare_files(name):
                             d['data'][ix,iy,iz] = subvector['data'][k]
                             k += 1
                         k += yinc
-                    k += zinc
-            
+                    k += zinc            
             else:
-                
                 num_elements = d['nx']*d['ny']*d['nz']
                 first_index = ((d['ix'] - d['ix_v']) + ((d['iy'] - d['iy_v']) + (d['iz'] - d['iz_v']) * d['ny_v']) * d['nx_v'])
                 
@@ -149,21 +167,13 @@ def compare_files(name):
             print("    sum(data) 2: {}".format(data_sum_2))
             pdi_subvectors.append(d)
 
-    # ______________________________________________________________________________
+    # ___________________________________________________________________________
+    # PFB File Processing
+    # ___________________________________________________________________________
 
-    print("")
-
-    if (with_tolerance <= 0):
-        
-        files = sorted(glob.glob(name + '.*pfb*'))
-        print(files)
-        pfb_file = open(files[0], mode='rb')
-        
-    else:
-        pfb_file = open(name + ".*pfsb", mode='rb')
-        
+    print(f"\n_______________________________ \nAnalyzing PFB Files\n")
+    pfb_file = open(binary_files[0], mode='rb')
     content = pfb_file.read()
-
     position = 0
     (X,) = struct.unpack(">d", content[position:position+8]); position += 8;
     (Y,) = struct.unpack(">d", content[position:position+8]); position += 8;
@@ -185,16 +195,16 @@ def compare_files(name):
 
     pfb_subvectors = []
 
-    for file in files:
+    for file in binary_files:
 
         pfb_file = open(file, mode='rb')
 
-        print(" File: {}".format(file))
+        print(f"\nFile: {file}")
         
         position = 3*(8 + 4 + 8)
 
         (numgrids,) = struct.unpack(">i", content[position:position+4]); position += 4;
-        numgrids_per_file = int(numgrids / len(files))
+        numgrids_per_file = int(numgrids / len(binary_files))
 
         print(" Total number of subgrids: {}".format(numgrids))
         print(" Local number of subgrids: {}".format(numgrids_per_file))
@@ -226,9 +236,7 @@ def compare_files(name):
                     (pfd_d['indy'][k],) = struct.unpack(">i", content[position:position+4]); position += 4;
                     (pfd_d['indz'][k],) = struct.unpack(">i", content[position:position+4]); position += 4;
                     (pfd_d['data'][k],) = struct.unpack(">d", content[position:position+8]); position += 8;
-                    
-            #d['data'] = np.zeros([num_elements])
-            #(d['data'],) = struct.unpack(">" + "d"*num_elements, content[position:position+8*num_elements]); position += 8*num_elements;
+            
             data_sum = np.sum(pfd_d['data'])
             print("  > subvector #{}".format(igrid))
             print("    num elements: {}".format(num_elements))
@@ -238,23 +246,32 @@ def compare_files(name):
             print("    sum(data): {}".format(data_sum))
             pfb_subvectors.append(pfd_d)
 
-    print("")
-    print(" Data comparison")
-
+    
+    # ___________________________________________________________________________
+    # Data Comparison
+    # ___________________________________________________________________________
+    print(f"\n_______________________________ \nData comparison\n")
     error = 0
-
     for igrid in range(numgrids):
         error = np.sum(np.abs(pfb_subvectors[igrid]['data'] - pdi_subvectors[igrid]['data']))
 
-    print(" - Error: {}".format(error))
+    print(f" - Error: {error}")
 
 # ______________________________________________________________________________
+# Main Function
+# ______________________________________________________________________________
 
-try:
-    names = sys.argv[1:]
-except:
-    print("\n Please, provide a path to the tables.\n")
-    raise
+def main():
+    parser = argparse.ArgumentParser(description="Compare PDI (HDF5) files with PFB binary files.")
+    parser.add_argument("names", nargs="+", help="Base name(s) of the files (without extension).")
+    args = parser.parse_args()
 
-for name in names:
-    compare_files(name)
+    for name in args.names:
+        try:
+            compare_files(name)
+        except Exception as e:
+            print(f"\nError processing '{name}': {e}\n")
+            traceback.print_exc()
+
+if __name__ == "__main__":
+    main()
