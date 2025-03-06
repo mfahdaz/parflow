@@ -147,18 +147,6 @@ jobs:
             pdi: "false"
           }
         - {
-            name: "Ubuntu 24.04 GCC Python PDI",
-            os: ubuntu-24.04,
-            cudaos: 'ubuntu2404',
-            cc: "gcc", cxx: "g++", fc: "gfortran",
-            python: "true",
-            backend: "none",
-            amps_layer: mpi1,
-            netcdf: "false",
-            memory_manager: "none",
-            pdi: "true"
-          }
-        - {
             name: "Ubuntu 22.04 GCC OMP",
             os: ubuntu-22.04,
             cudaos: 'ubuntu2204',
@@ -227,6 +215,18 @@ jobs:
             netcdf: "false",
             memory_manager: "umpire",
             pdi: "false"
+          }
+        - {
+            name: "Ubuntu 24.04 GCC PDI",
+            os: ubuntu-24.04,
+            cudaos: 'ubuntu2404',
+            cc: "gcc", cxx: "g++", fc: "gfortran",
+            python: "false",
+            backend: "none",
+            amps_layer: mpi1,
+            netcdf: "false",
+            memory_manager: "none",
+            pdi: "true"
           }
 
     steps:
@@ -515,6 +515,7 @@ jobs:
           mv -v ${curr_pdi}/pdi ${PARFLOW_DEP_DIR}
         fi
 
+        export LD_LIBRARY_PATH=${PARFLOW_DEP_DIR}/pdi/install/lib:${LD_LIBRARY_PATH}
         echo "PDI_FLAGS=-DPDI_ROOT=${PARFLOW_DEP_DIR}/pdi/install" >> $GITHUB_ENV
 
     - name: ParFlow CMake Configure
