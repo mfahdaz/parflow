@@ -503,6 +503,7 @@ jobs:
         if [[ "$CACHE_HIT" != 'true' ]]; then
           PDI_VERSION="1.8.1"
           URL="https://github.com/pdidev/pdi/archive/refs/tags/1.8.1.tar.gz"
+          export curr_pdi=$(pwd)
           mkdir -p pdi
           cd pdi
           curl -L $URL | tar --strip-components=1 -xz
@@ -511,8 +512,10 @@ jobs:
           cd build
           cmake .. -DCMAKE_INSTALL_PREFIX=../install
           make -j 2 install
+          mv -v ${curr_pdi} ${PARFLOW_DEP_DIR}
         fi
-        echo "PDI_FLAGS=-DPDI_ROOT=$PARFLOW_DEP_DIR/pdi/install" >> $GITHUB_ENV
+
+        echo "PDI_FLAGS=-DPDI_ROOT=${PARFLOW_DEP_DIR}/pdi/install" >> $GITHUB_ENV
 
     - name: ParFlow CMake Configure
       run: |
