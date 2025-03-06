@@ -512,7 +512,7 @@ jobs:
           cd build
           cmake .. -DCMAKE_INSTALL_PREFIX=../install
           make -j 2 install
-          mv -v ${curr_pdi} ${PARFLOW_DEP_DIR}
+          mv -v ${curr_pdi}/pdi ${PARFLOW_DEP_DIR}
         fi
 
         echo "PDI_FLAGS=-DPDI_ROOT=${PARFLOW_DEP_DIR}/pdi/install" >> $GITHUB_ENV
