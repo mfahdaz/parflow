@@ -146,7 +146,7 @@ jobs:
             memory_manager: "none",
             pdi: "false"
           }
-         - {
+        - {
             name: "Ubuntu 24.04 GCC Python PDI",
             os: ubuntu-24.04,
             cudaos: 'ubuntu2404',
