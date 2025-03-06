@@ -217,7 +217,7 @@ jobs:
             pdi: "false"
           }
         - {
-            name: "Ubuntu 24.04 GCC PDI",
+            name: "Ubuntu 24.04 GCC PDI Build",
             os: ubuntu-24.04,
             cudaos: 'ubuntu2404',
             cc: "gcc", cxx: "g++", fc: "gfortran",
@@ -515,7 +515,7 @@ jobs:
           mv -v ${curr_pdi}/pdi ${PARFLOW_DEP_DIR}
         fi
 
-        export LD_LIBRARY_PATH=${PARFLOW_DEP_DIR}/pdi/install/lib64:${LD_LIBRARY_PATH}
+        export LD_LIBRARY_PATH=${PARFLOW_DEP_DIR}/pdi/install/lib:${LD_LIBRARY_PATH}
         echo "LD_LIBRARY_PATH=${LD_LIBRARY_PATH}" >> $GITHUB_ENV
         echo "PDI_FLAGS=-DPDI_ROOT=${PARFLOW_DEP_DIR}/pdi/install" >> $GITHUB_ENV
 
@@ -550,8 +550,9 @@ jobs:
       run: (cd build; make -j 2 install)
 
     # Can't test with GPU since have no GPU hardware on testing nodes, GPU test is build only
+    # PDI testing requires a configuration specification tree, so for now, it is only being built and not tested.
     - name: ParFlow CTest
-      if: matrix.config.backend != 'cuda' && matrix.config.backend != 'kokkos'
+      if: matrix.config.backend != 'cuda' && matrix.config.backend != 'kokkos' && matrix.config.pdi != 'true'
       run: |
         export OMPI_MCA_rmaps_base_oversubscribe=1
         export OMP_NUM_THREADS=1
