@@ -550,7 +550,7 @@ jobs:
       run: (cd build; make -j 2 install)
 
     # Can't test with GPU since have no GPU hardware on testing nodes, GPU test is build only
-    # PDI testing requires a configuration specification tree, so for now, it is only being built and not tested.
+    # PDI testing requires a configuration file for specification tree, so for now, it is only being built and not tested.
     - name: ParFlow CTest
       if: matrix.config.backend != 'cuda' && matrix.config.backend != 'kokkos' && matrix.config.pdi != 'true'
       run: |
