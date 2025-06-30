@@ -36,6 +36,13 @@
 
 #include "parflow.h"
 #include "parflow_netcdf.h"
+#ifdef PARFLOW_HAVE_PDI
+#include <paraconf.h>
+#include <pdi.h>
+// not really the best place to put init and finalize because this should be pdi in general, 
+// not in situ
+#include <write_parflow_insitu.h>
+#endif
 
 #include "metadata.h"
 
@@ -1381,6 +1388,13 @@ SetupRichards(PFModule * this_module)
                                 press_filenames);
       }
 
+      // TODO: make sure this condition exists
+      if (public_xtra->write_insitu_press) {
+        char name_insitu[255];
+        strcpy(name_insitu, "pressures");
+        ShareDataInsitu(name_insitu, instance_xtra->pressure, stop_time, instance_xtra->iteration_number);
+      }
+
       if (public_xtra->write_pdi_press)
       {
         sprintf(file_postfix, "press.%05d", instance_xtra->file_number);
@@ -1434,6 +1448,14 @@ SetupRichards(PFModule * this_module)
                                 js_outputs, file_prefix, t, 0, "saturation", NULL, "cell", "subsurface",
                                 sizeof(satur_filenames) / sizeof(satur_filenames[0]),
                                 satur_filenames);
+      }
+
+      // TODO: make sure this condition exists
+      if (public_xtra->write_insitu_satur) 
+      {
+        char name_insitu[255];
+        strcpy(name_insitu, "saturations");
+        ShareDataInsitu(name_insitu, instance_xtra->saturation, stop_time, instance_xtra->iteration_number);
       }
 
       if (public_xtra->write_pdi_satur)
@@ -3536,6 +3558,14 @@ AdvanceRichards(PFModule * this_module, double start_time,      /* Starting time
                                 "pressure", "m", "cell", "subsurface", 0, NULL);
       }
 
+      // TODO: make sure this condition exists
+      if (public_xtra->write_insitu_press) 
+      {
+        char name_insitu[255];
+        strcpy(name_insitu, "pressures");
+        ShareDataInsitu(name_insitu, instance_xtra->pressure, stop_time, instance_xtra->iteration_number);
+      }
+
       if (public_xtra->write_pdi_press)
       {
         sprintf(file_postfix, "press.%05d",
@@ -3632,6 +3662,14 @@ AdvanceRichards(PFModule * this_module, double start_time,      /* Starting time
         MetadataAddDynamicField(
                                 js_outputs, file_prefix, t, instance_xtra->file_number,
                                 "saturation", "1/m", "cell", "subsurface", 0, NULL);
+      }
+
+      // TODO: make sure this condition exists
+      if (public_xtra->write_insitu_satur) 
+      {
+        char name_insitu[255];
+        strcpy(name_insitu, "saturations");
+        ShareDataInsitu(name_insitu, instance_xtra->saturation, stop_time, instance_xtra->iteration_number);
       }
 
       if (public_xtra->write_pdi_satur)
@@ -6468,6 +6506,11 @@ SolverRichards()
   Vector *porosity_out;
   Vector *saturation_out;
 
+  #ifdef PARFLOW_HAVE_PDI
+  InitPDI();
+  InitializeInsitu();
+  #endif
+
   SetupRichards(this_module);
 
   AdvanceRichards(this_module,
@@ -6482,6 +6525,10 @@ SolverRichards()
   recordMemoryInfo();
 
   TeardownRichards(this_module);
+  #ifdef PARFLOW_HAVE_PDI
+  FinalizeInsitu();
+  FinalizePDI();
+  #endif
 }
 
 /*

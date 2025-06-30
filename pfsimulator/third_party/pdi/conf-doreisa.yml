@@ -1,0 +1,187 @@
+.types:
+  - &DataArray
+    type: array
+    subtype: double
+    size: [$inz, $iny, $inx]
+    subsize: ['$inz-2', '$iny-2', '$inx-2']
+    start: [1,1,1]
+  - &Subregion
+    type: record
+    buffersize: 56
+    members:
+      ix:      {disp: 0, type: int}
+      iy:      {disp: 4, type: int}
+      iz:      {disp: 8, type: int}
+      nx:      {disp: 12, type: int}
+      ny:      {disp: 16, type: int}
+      nz:      {disp: 20, type: int}
+      sx:      {disp: 24, type: int}
+      sy:      {disp: 28, type: int}
+      sz:      {disp: 32, type: int}
+      rx:      {disp: 36, type: int}
+      ry:      {disp: 40, type: int}
+      rz:      {disp: 44, type: int}
+      level:   {disp: 48, type: int}
+      process: {disp: 52, type: int}
+  - &Subvector
+    type: record
+    buffersize: 32
+    members:
+      data:
+        disp: 0
+        type: pointer
+        subtype:
+          type: array
+          size: $temp_data_size
+          subtype: double
+      allocated:
+        disp: 8
+        type: int
+      data_space:
+        disp: 16
+        type: pointer
+        subtype: *Subregion
+      data_size:
+        disp: 24
+        type: int
+  - &SubregionArray
+    type: record
+    buffersize: 16
+    members:
+      subregions:
+        disp: 0
+        type: pointer
+        subtype:
+          type: array
+          size: $num_grid
+          subtype:
+            type: pointer
+            subtype: *Subregion
+      size:
+        disp: 8
+        type: int
+  - &Grid
+    type: record
+    buffersize: 40
+    members:
+      subgrids:
+        disp: 0
+        type: pointer
+        subtype:
+          type: array
+          size: 1
+          subtype: *SubregionArray
+      all_subgrids:
+        disp: 8
+        type: pointer
+        subtype:
+          type: array
+          size: 1
+          subtype: *SubregionArray
+      size:
+        disp: 16
+        type: int
+logging: trace
+# logging: "off"
+metadata:
+  filename:               { type: array, subtype: char, size: 255 }
+  parflowrank:            int
+  file_number:            int
+  drop_tolerance:         double
+  with_tolerance:         int
+  temp_data_size:         int
+  num_grid:               int
+  grid_disp:              int
+  data_space_disp:        int
+  size_disp:              int
+  vector_pdi_buffer_size: int
+  X:                      double
+  Y:                      double
+  Z:                      double
+  NX:                     int
+  NY:                     int
+  NZ:                     int
+  DX:                     double
+  DY:                     double
+  DZ:                     double
+  num_subgrids:           int
+  p: int
+  px: int
+  py: int
+  pz: int
+  max_it: int
+  it: int
+  inx: int
+  iny: int
+  inz: int
+  mpi_size: int
+  mpi_size_x: int
+  mpi_size_y: int
+  mpi_size_z: int
+  iNX:                     int
+  iNY:                     int
+  iNZ:                     int
+data:
+  data_array: *DataArray
+  name: { type: array, subtype: char, size: 255 }
+  sparse_vector_data:
+    type: record
+    buffersize: $vector_pdi_buffer_size
+    members:
+      subvectors:
+        disp: 0
+        type: pointer
+        subtype:
+          type: array
+          size: 1
+          subtype:
+            type: pointer
+            subtype: *Subvector
+      data_size:
+        disp: 8
+        type: int
+      grid:
+        disp: $grid_disp
+        type: pointer
+        subtype: *Grid
+      data_space:
+        disp: $data_space_disp
+        type: pointer
+        subtype: *SubregionArray
+      size:
+        disp: $size_disp
+        type: int
+plugins:
+  mpi:
+  pycall:
+    on_event:
+      Init:
+        with: {rank: $p}
+        exec: | 
+          import time
+          from doreisa.simulation_node import Client
+          start = time.perf_counter()
+          client = Client()
+          end = time.perf_counter()
+          print(f"[PDI, SETUP, {rank}] START: {start} END: {end} DIFF: {end - start}")
+
+      Share:
+        with: {p: $p, px: $px, py: $py, pz: $pz, it: $it,  mpi_size_x: $mpi_size_x, mpi_size_y: $mpi_size_y, mpi_size_z: $mpi_size_z,  data: $data_array, name: $name}
+        exec: |
+
+          idx = (name==0).argmax().item()
+          name = "".join(chr(i) for i in name[:idx])
+
+          # doreisa
+          start = time.perf_counter()
+          client.add_chunk(name, (pz.item(),py.item(),px.item()), (mpi_size_z.item(), mpi_size_y.item(), mpi_size_x.item()), 100, it.item(), data, store_externally=False)
+          end = time.perf_counter()
+
+          print(f"[PDI, AVAILABLE, {p}] START: {start} END: {end} DIFF: {end - start} ITER: {it.item()} QUANT: {name}")
+
+      Finalize: 
+        exec: |
+          start = time.perf_counter()
+
+          end = time.perf_counter()
+          print(f"[PDI, FINALIZE, {p}] START: {start} END: {end} DIFF: {end - start}")
