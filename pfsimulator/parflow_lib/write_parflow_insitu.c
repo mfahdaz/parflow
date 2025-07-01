@@ -76,9 +76,6 @@ void InitPDI() {
  */
 void FinalizePDI() {
 #ifdef PARFLOW_HAVE_PDI
-  // Call the Finalize event to which allows pycall to trigger python computations
-  PDI_event("Finalize");
-
   // Finalize PDI to clean up resources
   PDI_finalize();
 #endif
