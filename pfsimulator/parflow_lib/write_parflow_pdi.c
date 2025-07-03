@@ -37,6 +37,7 @@
 #include <string.h>
 #include <unistd.h>
 #include <stdbool.h>
+#include <parflow_proto.h>
 
 
 /**
@@ -59,6 +60,25 @@
  *
  * @see PDI_expose(), PDI_init(), PDI_finalize() at https://pdi.dev/1.8/modules.html
  */
+
+
+//TODO maybe move into another file
+// Static variable to track initialization state
+static int pdi_initialized = 0;
+
+void PDI_safe_init(const char *yaml_file) {
+#ifdef PARFLOW_HAVE_PDI
+    if (!pdi_initialized) {
+  	PC_tree_t conf = PC_parse_path(yaml_file);
+        PDI_init(conf);
+        pdi_initialized = 1;
+    }
+#endif
+}
+
+int PDI_is_initialized() {
+    return pdi_initialized;
+}
 
 void     WritePDI(
                   char *  file_prefix,
@@ -99,10 +119,10 @@ void     WritePDI(
   int data_space_disp = ((char*)&(v->data_space)) - ((char*)v);
   int size_disp = ((char*)&(v->size)) - ((char*)v);
   /* load PDI Specification tree */
-  PC_tree_t conf = PC_parse_path("conf.yml");
+  //PC_tree_t conf = PC_parse_path("conf.yml");
 
   /* initialize PDI */
-  PDI_init(conf);
+  PDI_safe_init("conf.yml");
 
   PDI_expose("parflowrank", &p, PDI_OUT);
   PDI_expose("filename", &filename, PDI_OUT);

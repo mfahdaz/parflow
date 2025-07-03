@@ -123,6 +123,7 @@ set (SRC_FILES_CONST advect.F
   cpl_parflow.c
   write_clm_netcdf.c
   write_parflow_binary.c
+  write_parflow_insitu.c
   write_parflow_netcdf.c
   write_parflow_pdi.c
   write_parflow_silo.c

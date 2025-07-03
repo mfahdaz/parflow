@@ -32,7 +32,7 @@
 #endif
 #include <stdbool.h>
 #include <unistd.h>
-#include 
+#include <parflow_proto.h>
 
 /**
  * @brief Read the configuration yaml for PDI and initialize it.
@@ -50,17 +50,6 @@
  * https://pdi.dev/1.8/modules.html
  */
 
-void InitPDI() {
-#ifdef PARFLOW_HAVE_PDI
-  // Read the configuration file for PDI
-  PC_tree_t conf = PC_parse_path("conf.yml");
- 
-  // Initialize PDI with the configuration
-  PDI_init(conf);
-
-#endif
-}
-
 /**
  * @brief Finalize the PDI library.
  *
@@ -74,12 +63,6 @@ void InitPDI() {
  * @see PDI_expose(), PDI_init(), PDI_finalize() at
  * https://pdi.dev/1.8/modules.html
  */
-void FinalizePDI() {
-#ifdef PARFLOW_HAVE_PDI
-  // Finalize PDI to clean up resources
-  PDI_finalize();
-#endif
-}
 
 void InitializeInsitu() {
 #ifdef PARFLOW_HAVE_PDI
@@ -133,12 +116,14 @@ void ShareDataInsitu(char *name_insitu,
 
         double *data_array = SubvectorData(subvector);
 
-        PDI_multi_expose("Share", "rank", &rank, PDI_OUT, "rank_coord_x", &rank_coord_x, PDI_OUT,
+        PDI_multi_expose("Share", 
+			"inx", &inx , PDI_OUT,  "iny", &iny, PDI_OUT, "inz", &inz, PDI_OUT,
+			"rank", &rank, PDI_OUT, "rank_coord_x", &rank_coord_x, PDI_OUT,
                          "rank_coord_y", &rank_coord_y, PDI_OUT, "rank_coord_z", &rank_coord_z, PDI_OUT,
                          "mpi_size", &mpi_size, PDI_OUT, "mpi_size_x", &mpi_size_x, PDI_OUT,
                          "mpi_size_y", &mpi_size_y, PDI_OUT, "mpi_size_z", &mpi_size_z, PDI_OUT,
                          "it", &current_iter, PDI_OUT, "data_array", data_array, PDI_OUT, "name",
-                         &name_insitu, PDI_OUT, NULL);
+                         name_insitu, PDI_OUT, NULL);
 #endif
 }
 

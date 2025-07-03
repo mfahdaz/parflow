@@ -1385,6 +1385,14 @@ void WritePFSBinary(char *file_prefix, char *file_suffix, Vector *v, double drop
 
 /* write_parflow_pdi.c */
 void WritePDI(char *file_prefix, char *file_suffix, int iteration, Vector *v, int with_tolerance, double drop_tolerance);
+void PDI_safe_init(const char *yaml_file);
+
+/* write_parflow_insitu.c */
+void InitializeInsitu();
+void FinalizeInsitu();
+
+void ShareDataInsitu(char *name_insitu, Vector *vector, double stop_time, int current_iteration);
+
 
 /* write_parflow_silo.c */
 void WriteSilo(char *  file_prefix,

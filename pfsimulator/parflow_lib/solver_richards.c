@@ -41,7 +41,7 @@
 #include <pdi.h>
 // not really the best place to put init and finalize because this should be pdi in general, 
 // not in situ
-#include <write_parflow_insitu.h>
+//#include <write_parflow_insitu.h>
 #endif
 
 #include "metadata.h"
@@ -116,6 +116,9 @@ typedef struct {
   int write_pdi_evaptrans_sum;    /* write evaptrans_sum via PDI */
   int write_pdi_overland_sum;     /* write overland_sum via PDI */
   int write_pdi_overland_bc_flux; /* write overland_bc_flux via PDI */
+
+  int share_insitu_press;
+  int share_insitu_satur;
 
   int write_silo_subsurf_data;  /* write permeability/porosity? */
   int write_silo_press;         /* write pressures? */
@@ -1388,8 +1391,7 @@ SetupRichards(PFModule * this_module)
                                 press_filenames);
       }
 
-      // TODO: make sure this condition exists
-      if (public_xtra->write_insitu_press) {
+      if (public_xtra->share_insitu_press) {
         char name_insitu[255];
         strcpy(name_insitu, "pressures");
         ShareDataInsitu(name_insitu, instance_xtra->pressure, stop_time, instance_xtra->iteration_number);
@@ -1450,8 +1452,7 @@ SetupRichards(PFModule * this_module)
                                 satur_filenames);
       }
 
-      // TODO: make sure this condition exists
-      if (public_xtra->write_insitu_satur) 
+      if (public_xtra->share_insitu_satur) 
       {
         char name_insitu[255];
         strcpy(name_insitu, "saturations");
@@ -3558,8 +3559,7 @@ AdvanceRichards(PFModule * this_module, double start_time,      /* Starting time
                                 "pressure", "m", "cell", "subsurface", 0, NULL);
       }
 
-      // TODO: make sure this condition exists
-      if (public_xtra->write_insitu_press) 
+      if (public_xtra->share_insitu_press) 
       {
         char name_insitu[255];
         strcpy(name_insitu, "pressures");
@@ -3665,7 +3665,7 @@ AdvanceRichards(PFModule * this_module, double start_time,      /* Starting time
       }
 
       // TODO: make sure this condition exists
-      if (public_xtra->write_insitu_satur) 
+      if (public_xtra->share_insitu_satur) 
       {
         char name_insitu[255];
         strcpy(name_insitu, "saturations");
@@ -5869,8 +5869,28 @@ SolverRichardsNewPublicXtra(char *name)
   }
 #endif
 
-  /* PDI file writing control */
+  /*InSitu*/
+  sprintf(key, "%s.ShareInsituPressure", name);
+  switch_name = GetStringDefault(key, "True");
+  switch_value = NA_NameToIndex(switch_na, switch_name);
+  if (switch_value < 0)
+  {
+    InputError("Error: invalid print switch value <%s> for key <%s>\n",
+               switch_name, key);
+  }
+  public_xtra->share_insitu_press = switch_value;
 
+  sprintf(key, "%s.ShareInsituSaturation", name);
+  switch_name = GetStringDefault(key, "True");
+  switch_value = NA_NameToIndex(switch_na, switch_name);
+  if (switch_value < 0)
+  {
+    InputError("Error: invalid print switch value <%s> for key <%s>\n",
+               switch_name, key);
+  }
+  public_xtra->share_insitu_satur = switch_value;
+
+  /* PDI file writing control */
   sprintf(key, "%s.WritePDISubsurfData", name);
   switch_name = GetStringDefault(key, "True");
   switch_value = NA_NameToIndex(switch_na, switch_name);
@@ -6507,7 +6527,7 @@ SolverRichards()
   Vector *saturation_out;
 
   #ifdef PARFLOW_HAVE_PDI
-  InitPDI();
+  PDI_safe_init("conf.yml");
   InitializeInsitu();
   #endif
 
@@ -6527,7 +6547,7 @@ SolverRichards()
   TeardownRichards(this_module);
   #ifdef PARFLOW_HAVE_PDI
   FinalizeInsitu();
-  FinalizePDI();
+  PDI_finalize();
   #endif
 }
 

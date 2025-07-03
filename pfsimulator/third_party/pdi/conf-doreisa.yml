@@ -105,10 +105,10 @@ metadata:
   DY:                     double
   DZ:                     double
   num_subgrids:           int
-  p: int
-  px: int
-  py: int
-  pz: int
+  rank: int
+  rank_coord_x: int
+  rank_coord_y: int
+  rank_coord_z: int
   max_it: int
   it: int
   inx: int
@@ -156,32 +156,32 @@ plugins:
   pycall:
     on_event:
       Init:
-        with: {rank: $p}
+        with: {}
         exec: | 
           import time
           from doreisa.simulation_node import Client
-          start = time.perf_counter()
+          start = time.time()
           client = Client()
-          end = time.perf_counter()
-          print(f"[PDI, SETUP, {rank}] START: {start} END: {end} DIFF: {end - start}")
+          end = time.time()
+          print(f"[PDI, SETUP] START: {start} END: {end} DIFF: {end - start}")
 
       Share:
-        with: {p: $p, px: $px, py: $py, pz: $pz, it: $it,  mpi_size_x: $mpi_size_x, mpi_size_y: $mpi_size_y, mpi_size_z: $mpi_size_z,  data: $data_array, name: $name}
+        with: {rank: $rank, rank_coord_x: $rank_coord_x, rank_coord_y: $rank_coord_y, rank_coord_z: $rank_coord_z, it: $it,  mpi_size_x: $mpi_size_x, mpi_size_y: $mpi_size_y, mpi_size_z: $mpi_size_z,  data: $data_array, name: $name}
         exec: |
 
           idx = (name==0).argmax().item()
           name = "".join(chr(i) for i in name[:idx])
 
           # doreisa
-          start = time.perf_counter()
-          client.add_chunk(name, (pz.item(),py.item(),px.item()), (mpi_size_z.item(), mpi_size_y.item(), mpi_size_x.item()), 100, it.item(), data, store_externally=False)
-          end = time.perf_counter()
+          start = time.time()
+          client.add_chunk(name, (rank_coord_z.item(),rank_coord_y.item(),rank_coord_x.item()), (mpi_size_z.item(), mpi_size_y.item(), mpi_size_x.item()), 100, it.item(), data, store_externally=False)
+          end = time.time()
 
-          print(f"[PDI, AVAILABLE, {p}] START: {start} END: {end} DIFF: {end - start} ITER: {it.item()} QUANT: {name}")
+          print(f"[PDI, AVAILABLE, {rank}] START: {start} END: {end} DIFF: {end - start} ITER: {it.item()} QUANT: {name}")
 
       Finalize: 
         exec: |
-          start = time.perf_counter()
+          start = time.time()
 
-          end = time.perf_counter()
-          print(f"[PDI, FINALIZE, {p}] START: {start} END: {end} DIFF: {end - start}")
+          end = time.time()
+          print(f"[PDI, FINALIZE, {rank}] START: {start} END: {end} DIFF: {end - start}")
