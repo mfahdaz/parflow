@@ -150,9 +150,6 @@ void     WritePDI(
   PDI_expose("size_disp", &size_disp, PDI_OUT);
   PDI_expose("sparse_vector_data", v, PDI_OUT);
 
-  /* finalize PDI */
-  PDI_finalize();
-
   /* stop PDI timer */
   EndTiming(PDITimingIndex);
 #endif
