@@ -3238,8 +3238,8 @@ AdvanceRichards(PFModule * this_module, double start_time,      /* Starting time
     /***************************************************************
     *         spinup - remove excess pressure at land surface     *
     ***************************************************************/
-    //int spinup = 1;
-    if (public_xtra->spinup == 1)
+    int skimming = 1;
+    if (skimming == 1)
     {
       GrGeomSolid *gr_domain = ProblemDataGrDomain(problem_data);
 

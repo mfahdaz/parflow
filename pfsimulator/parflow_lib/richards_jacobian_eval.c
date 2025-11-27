@@ -2015,15 +2015,17 @@ void    RichardsJacobianEval(
             /*diagonal term */
             /* original preconditioner from KM2006 here for historical reasons; performance is much slower than newer formulation below */
             //cp[im] += (vol * z_mult_dat[ip]) / (dz * Mean(z_mult_dat[ip], z_mult_dat[ip + sz_v])) * (dt + 1);
-            cp[im] += (vol / dz) + (vol / ffy) * dt * (ke_der[io1] - kw_der[io1])
-                      + (vol / ffx) * dt * (kn_der[io1] - ks_der[io1]);
+            /*cp[im] += (vol / dz) + (vol / ffy) * dt * (ke_der[io1] - kw_der[io1])
+                      + (vol / ffx) * dt * (kn_der[io1] - ks_der[io1]);*/
+            cp[im] += (vol / dz);
           }
-          else
+          /*else
           {
             // Laura's version; old diffusive wave formulation which is now replaced by DWE
             cp[im] += 0.0 + dt * (vol / dz) * (public_xtra->SpinupDampP1 * exp(pfmin(pp[ip], 0.0) * public_xtra->SpinupDampP1) * public_xtra->SpinupDampP2);                      //NBE
-          }
-
+          }*/
+          
+          #if 0
           if (diffusive == 0)
           {
             /*west term */
@@ -2052,6 +2054,7 @@ void    RichardsJacobianEval(
             /*north term */
             np[im] += (vol / ffx) * dt * (knns_der[io1]);
           }
+          #endif
         }),
                              CellFinalize(DoNothing),
                              AfterAllCells(DoNothing)

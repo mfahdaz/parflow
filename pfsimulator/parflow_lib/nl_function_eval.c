@@ -1605,10 +1605,12 @@ void NlFunctionEval(Vector *     pressure, /* Current pressure values */
 
         /* Add overland contribs */
         q_overlnd = 0.0;
-        q_overlnd = vol
+        /*q_overlnd = vol
                     * (pfmax(pp[ip], 0.0) - pfmax(opp[ip], 0.0)) / dz +
                     dt * vol * ((ke_[io] - kw_[io]) / dx + (kn_[io] - ks_[io]) / dy)
-                    / dz + vol * dt / dz * (exp(pfmin(pp[ip], 0.0) * public_xtra->SpinupDampP1) * public_xtra->SpinupDampP2);
+                    / dz + vol * dt / dz * (exp(pfmin(pp[ip], 0.0) * public_xtra->SpinupDampP1) * public_xtra->SpinupDampP2);*/
+        q_overlnd = vol
+                    * (pfmax(pp[ip], 0.0) - pfmax(opp[ip], 0.0)) / dz;
         //NBE
 
         if (overlandspinup == 1)
