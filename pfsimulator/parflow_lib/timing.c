@@ -61,9 +61,20 @@ void  NewTiming()
   RegisterTiming("PFSOL Read");
   RegisterTiming("Clustering");
   RegisterTiming("Netcdf I/O");
-  RegisterTiming("PDI I/O");
+#ifdef PARFLOW_HAVE_PDI
+  RegisterTiming("PDI Setup");
+  RegisterTiming("PDI Share");
+  RegisterTiming("PDI Cleanup");
+  RegisterTiming("Insitu Setup");
+  RegisterTiming("Insitu Share");
+  RegisterTiming("Insitu Cleanup");
+#endif
 #ifdef VECTOR_UPDATE_TIMING
-  RegisterTiming("VectorUpdate");
+  #ifdef PARFLOW_HAVE_PDI
+    RegisterTiming("VectorUpdate");
+  #else
+    RegisterTiming("VectorUpdate");
+  #endif
 #endif
 }
 

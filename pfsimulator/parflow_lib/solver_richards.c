@@ -5871,7 +5871,7 @@ SolverRichardsNewPublicXtra(char *name)
 
   /*InSitu*/
   sprintf(key, "%s.ShareInsituPressure", name);
-  switch_name = GetStringDefault(key, "True");
+  switch_name = GetStringDefault(key, "False");
   switch_value = NA_NameToIndex(switch_na, switch_name);
   if (switch_value < 0)
   {
@@ -5881,7 +5881,7 @@ SolverRichardsNewPublicXtra(char *name)
   public_xtra->share_insitu_press = switch_value;
 
   sprintf(key, "%s.ShareInsituSaturation", name);
-  switch_name = GetStringDefault(key, "True");
+  switch_name = GetStringDefault(key, "False");
   switch_value = NA_NameToIndex(switch_na, switch_name);
   if (switch_value < 0)
   {
@@ -5892,7 +5892,7 @@ SolverRichardsNewPublicXtra(char *name)
 
   /* PDI file writing control */
   sprintf(key, "%s.WritePDISubsurfData", name);
-  switch_name = GetStringDefault(key, "True");
+  switch_name = GetStringDefault(key, "False");
   switch_value = NA_NameToIndex(switch_na, switch_name);
   if (switch_value < 0)
   {
@@ -5952,7 +5952,7 @@ SolverRichardsNewPublicXtra(char *name)
   public_xtra->write_pdi_velocities = switch_value;
 
   sprintf(key, "%s.WritePDISaturation", name);
-  switch_name = GetStringDefault(key, "True");
+  switch_name = GetStringDefault(key, "False");
   switch_value = NA_NameToIndex(switch_na, switch_name);
   if (switch_value < 0)
   {
@@ -5962,7 +5962,7 @@ SolverRichardsNewPublicXtra(char *name)
   public_xtra->write_pdi_satur = switch_value;
 
   sprintf(key, "%s.WritePDIMask", name);
-  switch_name = GetStringDefault(key, "True");
+  switch_name = GetStringDefault(key, "False");
   switch_value = NA_NameToIndex(switch_na, switch_name);
   if (switch_value < 0)
   {
@@ -6547,7 +6547,9 @@ SolverRichards()
   TeardownRichards(this_module);
   #ifdef PARFLOW_HAVE_PDI
   FinalizeInsitu();
+  BeginTiming(PDICleanupTimingIndex)
   PDI_finalize();
+  EndTiming(PDICleanupTimingIndex)
   #endif
 }
 

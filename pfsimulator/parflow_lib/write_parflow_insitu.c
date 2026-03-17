@@ -67,14 +67,18 @@
 void InitializeInsitu() {
 #ifdef PARFLOW_HAVE_PDI
         // Call the Init event which will instantiate doreisa client. This should be done once.
+        BeginTiming(InsituSetupTimingIndex);
         PDI_event("Init");
+        EndTiming(InsituSetupTimingIndex);
 #endif
 }
 
 void FinalizeInsitu() {
 #ifdef PARFLOW_HAVE_PDI
         // Call the Init event which will instantiate doreisa client. This should be done once.
+        BeginTiming(InsituCleanupTimingIndex);
         PDI_event("Finalize");
+        EndTiming(InsituCleanupTimingIndex)
 #endif
 }
 
@@ -83,6 +87,7 @@ void ShareDataInsitu(char *name_insitu,
                       double stop_time, 
                       int current_iteration) {
 #ifdef PARFLOW_HAVE_PDI
+        BeginTiming(InsituShareTimingIndex)
         int rank = amps_Rank(amps_CommWorld);
 
         // coordinates of each rank
@@ -124,6 +129,7 @@ void ShareDataInsitu(char *name_insitu,
                          "mpi_size_y", &mpi_size_y, PDI_OUT, "mpi_size_z", &mpi_size_z, PDI_OUT,
                          "it", &current_iter, PDI_OUT, "data_array", data_array, PDI_OUT, "name",
                          name_insitu, PDI_OUT, NULL);
+        EndTiming(InsituShareTimingIndex)
 #endif
 }
 

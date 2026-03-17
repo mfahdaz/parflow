@@ -68,11 +68,13 @@ static int pdi_initialized = 0;
 
 void PDI_safe_init(const char *yaml_file) {
 #ifdef PARFLOW_HAVE_PDI
+    BeginTiming(PDISetupTimingIndex)
     if (!pdi_initialized) {
   	PC_tree_t conf = PC_parse_path(yaml_file);
         PDI_init(conf);
         pdi_initialized = 1;
     }
+    EndTiming(PDISetupTimingIndex)
 #endif
 }
 
@@ -95,8 +97,7 @@ void     WritePDI(
   int p;
 
   /* start PDI timer */
-  BeginTiming(PDITimingIndex);
-
+  BeginTiming(PDIShareTimingIndex);
   /* current rank */
   p = amps_Rank(amps_CommWorld);
   /* compute number of patches to write */
@@ -151,6 +152,6 @@ void     WritePDI(
   PDI_expose("sparse_vector_data", v, PDI_OUT);
 
   /* stop PDI timer */
-  EndTiming(PDITimingIndex);
+  EndTiming(PDIShareTimingIndex);
 #endif
 }

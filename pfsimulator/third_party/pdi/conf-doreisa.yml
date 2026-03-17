@@ -174,7 +174,13 @@ plugins:
 
           # doreisa
           start = time.time()
-          client.add_chunk(name, (rank_coord_z.item(),rank_coord_y.item(),rank_coord_x.item()), (mpi_size_z.item(), mpi_size_y.item(), mpi_size_x.item()), 100, it.item(), data, store_externally=False)
+          client.add_chunk(name,
+                          (rank_coord_z.item(),rank_coord_y.item(),rank_coord_x.item()), 
+                          (mpi_size_z.item(), mpi_size_y.item(), mpi_size_x.item()),
+                          4,
+                          it.item(),
+                          data,
+                          store_externally=False)
           end = time.time()
 
           print(f"[PDI, AVAILABLE, {rank}] START: {start} END: {end} DIFF: {end - start} ITER: {it.item()} QUANT: {name}")

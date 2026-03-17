@@ -39,21 +39,35 @@
  * With timing on
  * These values need to be in sync with the register statements in timing.c
  *--------------------------------------------------------------------------*/
-#define SolverSetupTimingIndex 0
-#define SolverTimingIndex 1
+#define SolverSetupTimingIndex     0
+#define SolverTimingIndex          1
 #define RichardsExclude1stTimeStepIndex 2
-#define SolverCleanupTimingIndex 3
-#define MatvecTimingIndex  4
-#define PFSBTimingIndex  5
-#define PFBTimingIndex  6
-#define CLMTimingIndex  7
-#define PFSOLReadTimingIndex  8
-#define ClusteringTimingIndex 9
-#define NetcdfTimingIndex 10
-#define PDITimingIndex  11
-#ifdef VECTOR_UPDATE_TIMING
-#define VectorUpdateTimingIndex  12
+#define SolverCleanupTimingIndex   3
+#define MatvecTimingIndex          4
+#define PFSBTimingIndex            5
+#define PFBTimingIndex             6
+#define CLMTimingIndex             7
+#define PFSOLReadTimingIndex       8
+#define ClusteringTimingIndex      9
+#define NetcdfTimingIndex         10
+
+#ifdef PARFLOW_HAVE_PDI
+        #define PDISetupTimingIndex            11
+        #define PDIShareTimingIndex            12
+        #define PDICleanupTimingIndex          13
+        #define InsituSetupTimingIndex         14
+        #define InsituShareTimingIndex         15
+        #define InsituCleanupTimingIndex       16
 #endif
+
+#ifdef VECTOR_UPDATE_TIMING
+        #ifdef PARFLOW_HAVE_PDI
+                #define VectorUpdateTimingIndex 17
+        #else
+                #define VectorUpdateTimingIndex 11
+        #endif
+#endif
+
 
 
 
