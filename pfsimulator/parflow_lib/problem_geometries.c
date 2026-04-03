@@ -30,6 +30,7 @@
 *****************************************************************************/
 
 #include "parflow.h"
+#include "parflow_netcdf.h"
 
 #include <string.h>
 #include <assert.h>
@@ -206,7 +207,8 @@ void           Geometries(
   while (current_indicator_data != NULL)
   {
     InitVectorAll(tmp_indicator_field, -1.0);
-    ReadPFBinary((current_indicator_data->filename), tmp_indicator_field);
+    // ReadPFBinary((current_indicator_data->filename), tmp_indicator_field);
+    ReadPFNC((current_indicator_data->filename), tmp_indicator_field, "indicator", 0, 3);
     handle = InitVectorUpdate(tmp_indicator_field, VectorUpdateAll);
     FinalizeVectorUpdate(handle);
 

@@ -2012,6 +2012,8 @@ AdvanceRichards(PFModule * this_module, double start_time,      /* Starting time
   fstop = 0;                    // init to something, only used with 3D met forcing
 #endif
 
+// TODO move the read from transient file here out of the loop
+
   do                            /* while take_more_time_steps */
   {
     if (t == ct)
@@ -2031,7 +2033,8 @@ AdvanceRichards(PFModule * this_module, double start_time,      /* Starting time
         /*Here looping similar to pfb is not implemented. All steps are assumed to be
          * present in the single NetCDF file*/
         //printf("DEBUG: read evap_trans file %s for step %i \n", filename, instance_xtra->file_number);
-        ReadPFNC(filename, evap_trans, "evaptrans", instance_xtra->file_number, 3);
+        // ReadPFNC(filename, evap_trans, "evaptrans", instance_xtra->file_number, 3);
+        ReadPFNC(filename, evap_trans, "evaptrans", 0, 3);
         //printf("DEBUG: evap_trans max min: %e %e \n",PFVMax(evap_trans),PFVMin(evap_trans));
         handle = InitVectorUpdate(evap_trans, VectorUpdateAll);
         FinalizeVectorUpdate(handle);
