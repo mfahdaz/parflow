@@ -369,7 +369,7 @@ int KinsolNonlinSolver(Vector *pressure, Vector *density, Vector *old_density, V
 
   FILE         *kinsol_file = (instance_xtra->kinsol_file);
 
-  int ret = 0;
+  int ret = -1;
 
   StateFunc(current_state) = nl_function_eval;
   StateProblemData(current_state) = problem_data;
@@ -410,6 +410,7 @@ int KinsolNonlinSolver(Vector *pressure, Vector *density, Vector *old_density, V
 #endif // PARFLOW_HAVE_PSCTOOLKIT
 
   /* Call KINSol */
+  // amps_Printf("KIN return code before: %d\n", ret);
   ret = KINSol(kin_mem,                      /* Memory allocated above */
                pf_n_pressure,      /* Initial guess @ this was "pressure before" */
                globalization,                /* NonLin. solver strategy. Here we use Newton with globalization */
@@ -450,6 +451,9 @@ int KinsolNonlinSolver(Vector *pressure, Vector *density, Vector *old_density, V
   {
     ret = 0;
   }
+
+  if (!amps_Rank(amps_CommWorld))
+    amps_Printf("KIN return code after: %d\n", ret);
 #else
   ret = KINSol((void*)kin_mem,          /* Memory allocated above */
                neq,                     /* Dummy variable here */
@@ -626,7 +630,8 @@ PFModule  *KinsolNonlinSolverInitInstanceXtra(
     /* Initialize N_Vector container for pressure variable */
     instance_xtra->pf_n_pressure = N_VNew_PSBLAS(
       PSBLASSessionContext(instance_xtra->psb_session), 
-      PSBLASSessionDescriptor(instance_xtra->psb_session)
+      PSBLASSessionDescriptor(instance_xtra->psb_session),
+      sunctx
     );
     N_VConst(0.0, instance_xtra->pf_n_pressure);
 
@@ -693,6 +698,7 @@ PFModule  *KinsolNonlinSolverInitInstanceXtra(
     /* Solve method and type */
     char methd[20] = "RGMRES";
     char ptype[20] = "ML";
+    // char ptype[20] = "BJAC";
     /* Solver options */
     psb_c_SolverOptions options;
     psb_c_DefaultSolverOptions(&options);
@@ -705,7 +711,8 @@ PFModule  *KinsolNonlinSolverInitInstanceXtra(
     /* Create PSBLAS linear solver object for kinsol */
     LS = SUNLinSol_PSBLAS(options, methd, ptype, 
       PSBLASSessionContext(instance_xtra->psb_session));
-    // SUNLinSolInitialize(LS);
+    int retc = SUNLinSolInitialize(LS);
+    // amps_Printf("return code from SUNLinSolInitialize*(): %d\n", retc);
     /* Test SUNLinSol Settings */
     // SUNLinSolSeti_PSBLAS(LS, "SMOOTHER_SWEEPS", 2);
     // SUNLinSolSeti_PSBLAS(LS, "SUB_FILLIN", 1);
