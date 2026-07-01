@@ -39,7 +39,9 @@ typedef struct {
   psb_c_ctxt *context;          /* PSBLAS Context */
   psb_c_descriptor *descriptor; /* PSBLAS Descriptor */
 
-  SUNMatrix sunmat; /* PSBLAS SUNMatrix object */
+  SUNMatrix sunmat;  /* PSBLAS SUNMatrix object (Full System Jacobian) */
+
+  SUNMatrix sunmat_prec;  /* PSBLAS SUNMatrix object (preconditioner matrix B) */
 
 } PSBLASSession;
 
@@ -60,6 +62,11 @@ void Set_SUNMatrix_From_Matrix(SUNMatrix sunmat,
                                Matrix *JC,
                                void *current_state);
 
+void Set_SUNMatrix_From_SymmetricMatrix(SUNMatrix sunmat,
+                                        Matrix *JB,
+                                        Matrix *JC,
+                                        void *current_state);
+
 int KINSolJacobianFunction(N_Vector pf_n_pressure,
                            N_Vector pf_n_fval,
                            SUNMatrix Jacobian,
@@ -70,6 +77,7 @@ int KINSolJacobianFunction(N_Vector pf_n_pressure,
 #define PSBLASSessionContext(session)    ((session)->context)
 #define PSBLASSessionDescriptor(session) ((session)->descriptor)
 #define PSBLASSessionSUNMatrix(session)  ((session)->sunmat)
+#define PSBLASSessionPrecSUNMatrix(session)  ((session)->sunmat_prec)
 
 #endif // _PSBLAS_SESSION_HEADER
 

@@ -48,6 +48,10 @@ typedef struct {
 #ifdef PARFLOW_HAVE_PSCTOOLKIT
   Vector      *pressure_aux;
   Vector      *fval_aux;
+
+  SUNMatrix       psb_prec_mat;   /* preconditioner SUNMatrix B */
+  SUNLinearSolver psb_lin_sol;    /* LS, so KINSolJacobianPrecFunction can call
+                                   * SUNLinSolSetPreconditioner_PSBLAS itself */
 #endif // PARFLOW_HAVE_PSCTOOLKIT
 
   double dt;
@@ -82,6 +86,8 @@ typedef struct {
 #ifdef PARFLOW_HAVE_PSCTOOLKIT
 #define StatePressureAux(state)   ((state)->pressure_aux)
 #define StateFvalAux(state)       ((state)->fval_aux)
+#define StatePSBPrecMatrix(state)  ((state)->psb_prec_mat)
+#define StatePSBLinSol(state)      ((state)->psb_lin_sol)
 #endif // PARFLOW_HAVE_PSCTOOLKIT
 #define StateDt(state)            ((state)->dt)
 #define StateTime(state)          ((state)->time)

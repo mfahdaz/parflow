@@ -410,7 +410,6 @@ int KinsolNonlinSolver(Vector *pressure, Vector *density, Vector *old_density, V
 #endif // PARFLOW_HAVE_PSCTOOLKIT
 
   /* Call KINSol */
-  // amps_Printf("KIN return code before: %d\n", ret);
   ret = KINSol(kin_mem,                      /* Memory allocated above */
                pf_n_pressure,      /* Initial guess @ this was "pressure before" */
                globalization,                /* NonLin. solver strategy. Here we use Newton with globalization */
@@ -452,8 +451,6 @@ int KinsolNonlinSolver(Vector *pressure, Vector *density, Vector *old_density, V
     ret = 0;
   }
 
-  if (!amps_Rank(amps_CommWorld))
-    amps_Printf("KIN return code after: %d\n", ret);
 #else
   ret = KINSol((void*)kin_mem,          /* Memory allocated above */
                neq,                     /* Dummy variable here */
@@ -706,21 +703,13 @@ PFModule  *KinsolNonlinSolverInitInstanceXtra(
     options.itmax  = 100;
     options.irst   = 20;
     options.itrace = 1;
-    options.istop  = 1;
+    options.istop  = 2;
 
     /* Create PSBLAS linear solver object for kinsol */
     LS = SUNLinSol_PSBLAS(options, methd, ptype, 
       PSBLASSessionContext(instance_xtra->psb_session));
     int retc = SUNLinSolInitialize(LS);
-    // amps_Printf("return code from SUNLinSolInitialize*(): %d\n", retc);
-    /* Test SUNLinSol Settings */
-    // SUNLinSolSeti_PSBLAS(LS, "SMOOTHER_SWEEPS", 2);
-    // SUNLinSolSeti_PSBLAS(LS, "SUB_FILLIN", 1);
-    // SUNLinSolSetc_PSBLAS(LS, "COARSE_SOLVE", "BJAC");
-    // SUNLinSolSetc_PSBLAS(LS, "COARSE_SUBSOLVE", "ILU");
-    // SUNLinSolSeti_PSBLAS(LS, "COARSE_FILLIN", 0);
 
-    // /* Low-Memory SUNLinSol Settings */
     SUNLinSolSetc_PSBLAS(LS, "SMOOTHER_TYPE", "L1-JACOBI");
     SUNLinSolSeti_PSBLAS(LS, "SMOOTHER_SWEEPS", 2);
     SUNLinSolSetc_PSBLAS(LS, "COARSE_SOLVE", "L1-JACOBI");
@@ -728,6 +717,22 @@ PFModule  *KinsolNonlinSolverInitInstanceXtra(
 
     KINSetLinearSolver(kin_mem, LS, PSBLASSessionSUNMatrix(instance_xtra->psb_session));
     KINSetJacFn(kin_mem, KINSolJacobianFunction);
+
+    /* Preconditioner setup */
+    /* Publish B and LS on current_state so KINSolJacobianPrecFunction
+     * can refresh B and register it with LS on every recompute.
+     *
+     * Do NOT call SUNLinSolSetPreconditioner_PSBLAS here, because B has not
+     * been filled or assembled yet, and the function does not
+     * validate SM_PMAT_P(B). The call belongs in
+     * KINSolJacobianPrecFunction, after SUNMatAsb_PSBLAS(B) succeeds.
+     * KINSol always runs the JacFn callback before SUNLinSolSetup
+     * within the same setup step, so LS_BMAT_P(S) will already be
+     * valid by the time SUNLinSolSetup_PSBLAS needs it.
+     */
+    SUNMatrix B = PSBLASSessionPrecSUNMatrix(instance_xtra->psb_session);
+    StatePSBPrecMatrix(current_state) = B;
+    StatePSBLinSol(current_state)     = LS;
 
 #endif // PARFLOW_HAVE_PSCTOOLKIT
 

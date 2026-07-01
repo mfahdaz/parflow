@@ -112,7 +112,7 @@ void InitPSBLASSession(PSBLASSession *session, Grid *grid)
     amps_Printf("Error in psb_c_cdasb: %d\n", info);
   }
 
-  /* Create PSBLAS SUNMatrix */
+  /* Create PSBLAS SUNMatrix (Full System Jacobian) */
   PSBLASSessionSUNMatrix(session) = SUNPSBLASMatrix(
       PSBLASSessionContext(session), 
       PSBLASSessionDescriptor(session)
@@ -120,6 +120,16 @@ void InitPSBLASSession(PSBLASSession *session, Grid *grid)
 
   if (PSBLASSessionSUNMatrix(session) == NULL) {
     amps_Printf("Error: Failure to create a SUNMatrix\n");
+  }
+
+  /* Create PSBLAS SUNMatrix (Preconditioner Matrix) */
+  PSBLASSessionPrecSUNMatrix(session) = SUNPSBLASMatrix(
+      PSBLASSessionContext(session), 
+      PSBLASSessionDescriptor(session)
+    );
+
+  if (PSBLASSessionPrecSUNMatrix(session) == NULL) {
+    amps_Printf("Error: Failure to create a Preconditioner SUNMatrix\n");
   }
 
   return;
@@ -150,10 +160,15 @@ void Set_N_Vector_From_Vector(N_Vector nvec, Vector *vec)
 
     int i = 0, j = 0, k = 0;
     int pf_idx = SubvectorEltIndex(v_sub, ix, iy, iz);
-    BoxLoopI1(i, j, k, ix, iy, iz, nx, ny, nz,
+    int psb_idx = SubgridEltIndex(subgrid, ix, iy, iz); /* always 0, kept explicit for symmetry/safety */
+    BoxLoopI2(i, j, k, ix, iy, iz, nx, ny, nz,
               pf_idx, nx_v, ny_v, nz_v, 1, 1, 1,
+              psb_idx, nx, ny, nz, 1, 1, 1,
     {
-      int psb_idx = SubgridEltIndex(subgrid, i, j, k);
+      if (pf_idx != SubvectorEltIndex(v_sub, i, j, k) || psb_idx != SubgridEltIndex(subgrid, i, j, k))
+      {
+        amps_Printf("FATAL: Set_N_Vector_From_Vector index mismatch at (%d,%d,%d)\n", i, j, k);
+      }
       psb_data[psb_idx] = v_data[pf_idx];
     });
   }
@@ -185,10 +200,15 @@ void Set_Vector_From_N_Vector(Vector *vec, N_Vector nvec)
 
     int i = 0, j = 0, k = 0;
     int pf_idx = SubvectorEltIndex(v_sub, ix, iy, iz);
-    BoxLoopI1(i, j, k, ix, iy, iz, nx, ny, nz,
+    int psb_idx = SubgridEltIndex(subgrid, ix, iy, iz);
+    BoxLoopI2(i, j, k, ix, iy, iz, nx, ny, nz,
               pf_idx, nx_v, ny_v, nz_v, 1, 1, 1,
+              psb_idx, nx, ny, nz, 1, 1, 1,
     {
-      int psb_idx = SubgridEltIndex(subgrid, i, j, k);
+      if (pf_idx != SubvectorEltIndex(v_sub, i, j, k) || psb_idx != SubgridEltIndex(subgrid, i, j, k))
+      {
+        amps_Printf("FATAL: Set_Vector_From_N_Vector index mismatch at (%d,%d,%d)\n", i, j, k);
+      }
       v_data[pf_idx] = psb_data[psb_idx];
     });
   }
@@ -211,9 +231,17 @@ void Set_SUNMatrix_From_Matrix(SUNMatrix sunmat,
   int JB_stencil_size = StencilSize(JB_stencil);
   StencilElt *JB_shape = StencilShape(JB_stencil);
 
-  psb_l_t *idx_row = ctalloc(psb_l_t, JB_stencil_size);
-  psb_l_t *idx_col = ctalloc(psb_l_t, JB_stencil_size);
-  psb_d_t *psb_val = ctalloc(psb_d_t, JB_stencil_size);
+  int GNX = SubgridNX(user_subgrid);
+  int GNY = SubgridNY(user_subgrid);
+  int GNZ = SubgridNZ(user_subgrid);
+
+  int *JB_stencil_offset = ctalloc(int, JB_stencil_size);
+  for (int istencil = 0; istencil < JB_stencil_size; ++istencil)
+  {
+    JB_stencil_offset[istencil] = JB_shape[istencil][0]
+                                 + JB_shape[istencil][1] * GNX
+                                 + JB_shape[istencil][2] * GNX * GNY;
+  }
 
   int isubgrid = 0;
   ForSubgridI(isubgrid, GridSubgrids(JB_grid))
@@ -236,15 +264,30 @@ void Set_SUNMatrix_From_Matrix(SUNMatrix sunmat,
     int ny_m = SubmatrixNY(JB_sub);
     int nz_m = SubmatrixNZ(JB_sub);
 
-    /* Insert contributions from JB Matrix */
-    int i = 0, j = 0, k = 0, idx = 0;
-    BoxLoopI1(i, j, k, ix, iy, iz, nx, ny, nz,
-              idx, nx_m, ny_m, nz_m, 1, 1, 1,
-    {
-      int pf_idx = SubmatrixEltIndex(JB_sub, i, j, k);
-      int psb_row_idx = SubgridEltIndex(user_subgrid, i, j, k); // row index
+    int row_buf_size = nx * JB_stencil_size;
+    psb_l_t *idx_row = ctalloc(psb_l_t, row_buf_size);
+    psb_l_t *idx_col = ctalloc(psb_l_t, row_buf_size);
+    psb_d_t *psb_val = ctalloc(psb_d_t, row_buf_size);
 
-      int num_invalid_elements = 0;
+    int i = 0, j = 0, k = 0;
+    /* idx must be seeded to the submatrix's actual base
+     * offset (generally nonzero i.e. Submatrix data carries ghost
+     * padding), not to 0. */
+    int idx = SubmatrixEltIndex(JB_sub, ix, iy, iz);
+    int psb_row_idx = SubgridEltIndex(user_subgrid, ix, iy, iz);
+    int n_ins = 0;
+
+    BoxLoopI2(i, j, k, ix, iy, iz, nx, ny, nz,
+              idx, nx_m, ny_m, nz_m, 1, 1, 1,
+              psb_row_idx, GNX, GNY, GNZ, 1, 1, 1,
+    {
+      int pf_idx = idx;
+      if (pf_idx != SubmatrixEltIndex(JB_sub, i, j, k) ||
+          psb_row_idx != SubgridEltIndex(user_subgrid, i, j, k))
+      {
+        amps_Printf("FATAL: Set_SUNMatrix_From_Matrix JB index mismatch at (%d,%d,%d)\n", i, j, k);
+      }
+
       for(int istencil = 0; istencil < JB_stencil_size; ++istencil)
       {
         double *JB_dat = SubmatrixStencilData(JB_sub, istencil);
@@ -257,32 +300,31 @@ void Set_SUNMatrix_From_Matrix(SUNMatrix sunmat,
 
         if (top_dat[itop] < 0 || k + st_k > lrint(top_dat[itop]) || k + st_k < lrint(bot_dat[itop]))
         {
-          ++num_invalid_elements;
+          continue;
         }
-        else
-        {
-          int psb_col_idx = SubgridEltIndex(user_subgrid,
-            (i + st_i), (j + st_j), (k + st_k));
 
-          idx_row[istencil - num_invalid_elements] = psb_row_idx; // row index
-          idx_col[istencil - num_invalid_elements] = psb_col_idx; // col index
-          psb_val[istencil - num_invalid_elements] = JB_dat[pf_idx]; // value
-        }
+        idx_row[n_ins] = psb_row_idx;
+        idx_col[n_ins] = psb_row_idx + JB_stencil_offset[istencil];
+        psb_val[n_ins] = JB_dat[pf_idx];
+        ++n_ins;
       }
 
-      int num_valid_elements = JB_stencil_size - num_invalid_elements;
-      if (num_valid_elements > 0)
+      if (i == ix + nx - 1 && n_ins > 0)
       {
-        SUNMatIns_PSBLAS(num_valid_elements, idx_row, idx_col, psb_val, sunmat);
+        SUNMatIns_PSBLAS(n_ins, idx_row, idx_col, psb_val, sunmat);
+        n_ins = 0;
       }
     });
-  }
 
-  if(JC == NULL)
-  {
     free(idx_row);
     free(idx_col);
     free(psb_val);
+  }
+
+  free(JB_stencil_offset);
+
+  if(JC == NULL)
+  {
     return;
   }
 
@@ -309,20 +351,30 @@ void Set_SUNMatrix_From_Matrix(SUNMatrix sunmat,
     int ny_m = SubmatrixNY(JC_sub);
     int nz_m = SubmatrixNZ(JC_sub);
 
-    /* Insert contributions from JC Matrix */
-    int i = 0, j = 0, k = 0, idx = 0;
+    int row_buf_size = nx * JC_stencil_size;
+    psb_l_t *idx_row = ctalloc(psb_l_t, row_buf_size);
+    psb_l_t *idx_col = ctalloc(psb_l_t, row_buf_size);
+    psb_d_t *psb_val = ctalloc(psb_d_t, row_buf_size);
+
+    int i = 0, j = 0, k = 0;
+    int idx = SubmatrixEltIndex(JC_sub, ix, iy, iz);  /* same as JB */
+    int n_ins = 0;
+
     BoxLoopI1(i, j, k, ix, iy, iz, nx, ny, 1,
               idx, nx_m, ny_m, nz_m, 1, 1, 1,
     {
       int itop = SubvectorEltIndex(top_sub, i, j, 0);
       int k_ = (int)top_dat[itop];
-      int pf_idx = SubmatrixEltIndex(JC_sub, i, j, k);
+      int pf_idx = idx;
+      if (pf_idx != SubmatrixEltIndex(JC_sub, i, j, k))
+      {
+        amps_Printf("FATAL: Set_SUNMatrix_From_Matrix JC index mismatch at (%d,%d,%d)\n", i, j, k);
+      }
 
       if (k_ >= 0)
       {
-        int psb_row_idx = SubgridEltIndex(user_subgrid, i, j, k_); // row index
+        int psb_row_idx = SubgridEltIndex(user_subgrid, i, j, k_);
 
-        int num_invalid_elements = 0;
         for(int istencil = 0; istencil < JC_stencil_size; ++istencil)
         {
           double *JC_dat = SubmatrixStencilData(JC_sub, istencil);
@@ -335,31 +387,254 @@ void Set_SUNMatrix_From_Matrix(SUNMatrix sunmat,
 
           if (kk < 0)
           {
-            ++num_invalid_elements;
+            continue;
           }
-          else
-          {
-            int psb_col_idx = SubgridEltIndex(user_subgrid,
-              (i + st_i), (j + st_j), (kk));
 
-            idx_row[istencil - num_invalid_elements] = psb_row_idx; // row index
-            idx_col[istencil - num_invalid_elements] = psb_col_idx; // col index
-            psb_val[istencil - num_invalid_elements] = JC_dat[pf_idx]; // value
-          }
-        }
-
-        int num_valid_elements = JC_stencil_size - num_invalid_elements;
-        if (num_valid_elements > 0)
-        {
-          SUNMatIns_PSBLAS(num_valid_elements, idx_row, idx_col, psb_val, sunmat);
+          idx_row[n_ins] = psb_row_idx;
+          idx_col[n_ins] = SubgridEltIndex(user_subgrid, (i + st_i), (j + st_j), kk);
+          psb_val[n_ins] = JC_dat[pf_idx];
+          ++n_ins;
         }
       }
+
+      if (i == ix + nx - 1 && n_ins > 0)
+      {
+        SUNMatIns_PSBLAS(n_ins, idx_row, idx_col, psb_val, sunmat);
+        n_ins = 0;
+      }
     });
+
+    free(idx_row);
+    free(idx_col);
+    free(psb_val);
   }
 
-  free(idx_row);
-  free(idx_col);
-  free(psb_val);
+  return;
+}
+
+void Set_SUNMatrix_From_SymmetricMatrix(SUNMatrix sunmat,
+                                        Matrix *JB,
+                                        Matrix *JC,
+                                        void *current_state)
+{
+   /* COO insertion into PSBLAS accumulates unless the matrix is cleared
+   * first. Nothing else clears this matrix between recompute events.
+   * It isn't part of KINSol's own matrix protocol, so we zero it
+   * unconditionally here. */
+  // SUNMatZero(sunmat);
+
+  Subgrid *user_subgrid = GridSubgrid(GlobalsUserGrid, 0);
+
+  ProblemData *problem_data = StateProblemData(((State*)current_state));
+  Vector *top = ProblemDataIndexOfDomainTop(problem_data);
+  Vector *bot = ProblemDataIndexOfDomainBottom(problem_data);
+
+  Grid *JB_grid = MatrixGrid(JB);
+  Stencil *JB_stencil = MatrixStencil(JB);
+  int JB_stencil_size = StencilSize(JB_stencil);
+  StencilElt *JB_shape = StencilShape(JB_stencil);
+
+  int GNX = SubgridNX(user_subgrid);
+  int GNY = SubgridNY(user_subgrid);
+  int GNZ = SubgridNZ(user_subgrid);
+
+  int *JB_stencil_offset = ctalloc(int, JB_stencil_size);
+  int *JB_is_diag = ctalloc(int, JB_stencil_size);
+  for (int istencil = 0; istencil < JB_stencil_size; ++istencil)
+  {
+    int st_i = JB_shape[istencil][0];
+    int st_j = JB_shape[istencil][1];
+    int st_k = JB_shape[istencil][2];
+    JB_stencil_offset[istencil] = st_i + st_j * GNX + st_k * GNX * GNY;
+    JB_is_diag[istencil] = (st_i == 0 && st_j == 0 && st_k == 0);
+  }
+
+  int isubgrid = 0;
+  ForSubgridI(isubgrid, GridSubgrids(JB_grid))
+  {
+    Subgrid *subgrid = SubgridArraySubgrid(GridSubgrids(JB_grid), isubgrid);
+
+    Submatrix *JB_sub = MatrixSubmatrix(JB, isubgrid);
+    Subvector *top_sub = VectorSubvector(top, isubgrid);
+    double *top_dat = SubvectorData(top_sub);
+    Subvector *bot_sub = VectorSubvector(bot, isubgrid);
+    double *bot_dat = SubvectorData(bot_sub);
+
+    int ix = SubgridIX(subgrid);
+    int iy = SubgridIY(subgrid);
+    int iz = SubgridIZ(subgrid);
+    int nx = SubgridNX(subgrid);
+    int ny = SubgridNY(subgrid);
+    int nz = SubgridNZ(subgrid);
+    int nx_m = SubmatrixNX(JB_sub);
+    int ny_m = SubmatrixNY(JB_sub);
+    int nz_m = SubmatrixNZ(JB_sub);
+
+    int row_buf_size = nx * 2 * JB_stencil_size;
+    psb_l_t *idx_row = ctalloc(psb_l_t, row_buf_size);
+    psb_l_t *idx_col = ctalloc(psb_l_t, row_buf_size);
+    psb_d_t *psb_val = ctalloc(psb_d_t, row_buf_size);
+
+    int i = 0, j = 0, k = 0;
+    int idx = SubmatrixEltIndex(JB_sub, ix, iy, iz);  /* THE FIX */
+    int psb_row_idx = SubgridEltIndex(user_subgrid, ix, iy, iz);
+    int n_ins = 0;
+
+    BoxLoopI2(i, j, k, ix, iy, iz, nx, ny, nz,
+              idx, nx_m, ny_m, nz_m, 1, 1, 1,
+              psb_row_idx, GNX, GNY, GNZ, 1, 1, 1,
+    {
+      int pf_idx = idx;
+      if (pf_idx != SubmatrixEltIndex(JB_sub, i, j, k) ||
+          psb_row_idx != SubgridEltIndex(user_subgrid, i, j, k))
+      {
+        amps_Printf("FATAL: Set_SUNMatrix_From_SymmetricMatrix JB index mismatch at (%d,%d,%d)\n", i, j, k);
+      }
+
+      for(int istencil = 0; istencil < JB_stencil_size; ++istencil)
+      {
+        double *JB_dat = SubmatrixStencilData(JB_sub, istencil);
+
+        int st_i = JB_shape[istencil][0];
+        int st_j = JB_shape[istencil][1];
+        int st_k = JB_shape[istencil][2];
+
+        int itop = SubvectorEltIndex(top_sub, (i + st_i), (j + st_j), 0);
+
+        if (top_dat[itop] < 0 || k + st_k > lrint(top_dat[itop]) || k + st_k < lrint(bot_dat[itop]))
+        {
+          continue;
+        }
+
+        int psb_col_idx = psb_row_idx + JB_stencil_offset[istencil];
+        double val = JB_dat[pf_idx];
+
+        idx_row[n_ins] = psb_row_idx;
+        idx_col[n_ins] = psb_col_idx;
+        psb_val[n_ins] = val;
+        ++n_ins;
+
+        if (!JB_is_diag[istencil])
+        {
+          idx_row[n_ins] = psb_col_idx;
+          idx_col[n_ins] = psb_row_idx;
+          psb_val[n_ins] = val;
+          ++n_ins;
+        }
+      }
+
+      if (i == ix + nx - 1 && n_ins > 0)
+      {
+        SUNMatIns_PSBLAS(n_ins, idx_row, idx_col, psb_val, sunmat);
+        n_ins = 0;
+      }
+    });
+
+    free(idx_row);
+    free(idx_col);
+    free(psb_val);
+  }
+
+  free(JB_stencil_offset);
+  free(JB_is_diag);
+
+  if(JC == NULL)
+  {
+    return;
+  }
+
+  Stencil *JC_stencil = MatrixStencil(JC);
+  int JC_stencil_size = StencilSize(JC_stencil);
+  StencilElt *JC_shape = StencilShape(JC_stencil);
+
+  isubgrid = 0;
+  ForSubgridI(isubgrid, GridSubgrids(JB_grid))
+  {
+    Subgrid *subgrid = SubgridArraySubgrid(GridSubgrids(JB_grid), isubgrid);
+
+    Submatrix *JC_sub = MatrixSubmatrix(JC, isubgrid);
+    Subvector *top_sub = VectorSubvector(top, isubgrid);
+    double *top_dat = SubvectorData(top_sub);
+
+    int ix = SubgridIX(subgrid);
+    int iy = SubgridIY(subgrid);
+    int iz = SubgridIZ(subgrid);
+    int nx = SubgridNX(subgrid);
+    int ny = SubgridNY(subgrid);
+    int nz = SubgridNZ(subgrid);
+    int nx_m = SubmatrixNX(JC_sub);
+    int ny_m = SubmatrixNY(JC_sub);
+    int nz_m = SubmatrixNZ(JC_sub);
+
+    int row_buf_size = nx * 2 * JC_stencil_size;
+    psb_l_t *idx_row = ctalloc(psb_l_t, row_buf_size);
+    psb_l_t *idx_col = ctalloc(psb_l_t, row_buf_size);
+    psb_d_t *psb_val = ctalloc(psb_d_t, row_buf_size);
+
+    int i = 0, j = 0, k = 0;
+    int idx = SubmatrixEltIndex(JC_sub, ix, iy, iz);  /* THE FIX */
+    int n_ins = 0;
+
+    BoxLoopI1(i, j, k, ix, iy, iz, nx, ny, 1,
+              idx, nx_m, ny_m, nz_m, 1, 1, 1,
+    {
+      int itop = SubvectorEltIndex(top_sub, i, j, 0);
+      int k_ = (int)top_dat[itop];
+      int pf_idx = idx;
+      if (pf_idx != SubmatrixEltIndex(JC_sub, i, j, k))
+      {
+        amps_Printf("FATAL: Set_SUNMatrix_From_SymmetricMatrix JC index mismatch at (%d,%d,%d)\n", i, j, k);
+      }
+
+      if (k_ >= 0)
+      {
+        int psb_row_idx = SubgridEltIndex(user_subgrid, i, j, k_);
+
+        for(int istencil = 0; istencil < JC_stencil_size; ++istencil)
+        {
+          double *JC_dat = SubmatrixStencilData(JC_sub, istencil);
+
+          int st_i = JC_shape[istencil][0];
+          int st_j = JC_shape[istencil][1];
+          int is_diagonal = (st_i == 0 && st_j == 0);
+
+          itop = SubvectorEltIndex(top_sub, (i + st_i), (j + st_j), 0);
+          int kk = (int)top_dat[itop];
+
+          if (kk < 0)
+          {
+            continue;
+          }
+
+          int psb_col_idx = SubgridEltIndex(user_subgrid, (i + st_i), (j + st_j), kk);
+          double val = JC_dat[pf_idx];
+
+          idx_row[n_ins] = psb_row_idx;
+          idx_col[n_ins] = psb_col_idx;
+          psb_val[n_ins] = val;
+          ++n_ins;
+
+          if (!is_diagonal)
+          {
+            idx_row[n_ins] = psb_col_idx;
+            idx_col[n_ins] = psb_row_idx;
+            psb_val[n_ins] = val;
+            ++n_ins;
+          }
+        }
+      }
+
+      if (i == ix + nx - 1 && n_ins > 0)
+      {
+        SUNMatIns_PSBLAS(n_ins, idx_row, idx_col, psb_val, sunmat);
+        n_ins = 0;
+      }
+    });
+
+    free(idx_row);
+    free(idx_col);
+    free(psb_val);
+  }
 
   return;
 }

@@ -383,7 +383,7 @@ char *GetString(Tcl_Interp *interp, char *key)
   Tcl_Obj *key_name;
   Tcl_Obj *value;
 
-  int length;
+  Tcl_Size length;
 
   array_name = Tcl_NewStringObj("Parflow::PFDB", 13);
   key_name = Tcl_NewStringObj(key, strlen(key));

@@ -228,6 +228,73 @@ int       KINSolMatVec(
 }
 
 #ifdef PARFLOW_HAVE_PSCTOOLKIT
+/* This routine builds the preconditioner matrix B from the symmetric part of the
+ * Jacobian (symm_part = 1) and registers it with the linear solver.
+ * This is NOT a SUNDIALS-invoked callback as there is no KINSol slot
+ * for "preconditioner matrix function" the way KINSetJacFn exists for
+ * the system Jacobian. It is called explicitly from
+ * KINSolJacobianFunction, on the same recompute cadence as A, so it
+ * needs no N_Vector parameters: pressure is already loaded into
+ * StatePressureAux by the time this runs.
+ */
+int KINSolJacobianPrecFunction(void *current_state)
+{
+  Vector *pressure = StatePressureAux((State*)current_state);
+
+  PFModule    *richards_jacobian_eval = StateJacEval(((State*)current_state));
+  Matrix      *J  = StateJac(((State*)current_state));
+  Matrix      *JC = StateJacC(((State*)current_state));
+  Vector      *old_pressure = StateOldPressure(((State*)current_state));
+  Vector      *saturation = StateSaturation(((State*)current_state));
+  Vector      *density = StateDensity(((State*)current_state));
+  ProblemData *problem_data = StateProblemData(((State*)current_state));
+  double dt = StateDt(((State*)current_state));
+  double time = StateTime(((State*)current_state));
+
+  InstanceXtra *instance_xtra = (InstanceXtra*)PFModuleInstanceXtra(richards_jacobian_eval);
+  PFModule    *bc_pressure = (instance_xtra->bc_pressure);
+  StateBCPressure((State*)current_state) = bc_pressure;
+
+  PFModuleInvokeType(RichardsJacobianEvalInvoke, richards_jacobian_eval,
+                      (pressure, old_pressure, &J, &JC, saturation, density,
+                      problem_data, dt, time, 1));
+
+  SUNMatrix B = StatePSBPrecMatrix(((State*)current_state));
+  if (B == NULL)
+  {
+    amps_Printf("ERROR: KINSolJacobianPrecFunction: StatePSBPrecMatrix is NULL "
+                "-- was it published on current_state in kinsol_nonlin_solver.c?\n");
+    return -1;
+  }
+
+  Set_SUNMatrix_From_SymmetricMatrix(B, J, JC, current_state);
+
+  int ret_prec = SUNMatAsb_PSBLAS(B);
+  if (ret_prec != 0)
+  {
+    amps_Printf("Error in SUNMatAsb_PSBLAS (preconditioner matrix): %d\n", ret_prec);
+    return ret_prec;
+  }
+
+  SUNLinearSolver LS = StatePSBLinSol(((State*)current_state));
+  if (LS == NULL)
+  {
+    // Check whether it was published on current_state in kinsol_nonlin_solver.c?
+    amps_Printf("ERROR: KINSolJacobianPrecFunction: StatePSBLinSol is NULL\n");
+    return -1;
+  }
+
+  //  registering B
+  int ret_set = SUNLinSolSetPreconditioner_PSBLAS(LS, B);
+  if (ret_set != SUN_SUCCESS)
+  {
+    amps_Printf("Error in SUNLinSolSetPreconditioner_PSBLAS: %d\n", ret_set);
+    return ret_set;
+  }
+
+  return 0;
+}
+
 /*  This routine provides the interface between KINSOL and ParFlow
  *  for richards' equation jacobian evaluations and matrix.*/
 int KINSolJacobianFunction(N_Vector pf_n_pressure,
@@ -271,9 +338,18 @@ int KINSolJacobianFunction(N_Vector pf_n_pressure,
     amps_Printf("Error in SUNMatAsb_PSBLAS: %d\n", ret);
   }
 
-  return 0;
+  /* Refresh the preconditioner matrix B on the same recompute cadence
+   * as A. See KINSolJacobianPrecFunction above. */
+  int ret_prec = KINSolJacobianPrecFunction(current_state);
+  if (ret_prec != 0)
+  {
+    amps_Printf("Error in KINSolJacobianPrecFunction: %d\n", ret_prec);
+  }
+
+  return(0);
 }
 #endif // PARFLOW_HAVE_PSCTOOLKIT
+
 
 /*  This routine evaluates the Richards jacobian based on the current
  *  pressure values.  */
