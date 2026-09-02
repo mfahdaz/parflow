@@ -65,6 +65,13 @@ typedef struct {
   int tfgupwind;  // RMM
   int using_MGSemi;  // RMM
   SeepageLookup seepage;
+
+#if defined (PARFLOW_HAVE_PSCTOOLKIT)
+  int time_index_psctoolkit;
+  int time_index_copy_psblas_precon_sunmat;
+  int time_index_copy_psblas_full_sunmat;
+  int time_index_copy_nvector;
+#endif  // PARFLOW_HAVE_PSCTOOLKIT
 } PublicXtra;
 
 typedef struct {
@@ -163,10 +170,18 @@ int       KINSolMatVec(
   Vector      *y = N_VectorData(pf_n_y);
   Vector      *pressure = N_VectorData(pf_n_pressure);
 #else // PARFLOW_HAVE_PSCTOOLKIT
+
+  // public_xtra needed for timing 
+  // PFModule    *this_module = StateJacEval(((State*)current_state));
+  PFModule      *this_module = ThisPFModule;
+  PublicXtra    *public_xtra = (PublicXtra*)PFModulePublicXtra(this_module);
+
   Vector *x = StatePressureAux((State*)current_state);
   Vector *y = StateFvalAux((State*)current_state);
   Vector *pressure = StatePressureAux((State*)current_state);
+  BeginTiming(public_xtra->time_index_copy_nvector);
   Set_Vector_From_N_Vector(pressure, pf_n_pressure);
+  EndTiming(public_xtra->time_index_copy_nvector);
 #endif // PARFLOW_HAVE_PSCTOOLKIT
 
 #else // PARFLOW_HAVE_SUNDIALS
@@ -211,8 +226,10 @@ int       KINSolMatVec(
   }
 
 #ifdef PARFLOW_HAVE_PSCTOOLKIT
+  BeginTiming(public_xtra->time_index_copy_nvector);
   Set_Vector_From_N_Vector(x, pf_n_x);
   Set_Vector_From_N_Vector(y, pf_n_y);
+  EndTiming(public_xtra->time_index_copy_nvector);
 #endif // PARFLOW_HAVE_PSCTOOLKIT
 
   if (JC == NULL)
@@ -221,7 +238,9 @@ int       KINSolMatVec(
     MatvecSubMat(current_state, 1.0, J, JC, x, 0.0, y);
 
 #ifdef PARFLOW_HAVE_PSCTOOLKIT
+  BeginTiming(public_xtra->time_index_copy_nvector);
   Set_N_Vector_From_Vector(pf_n_y, y);
+  EndTiming(public_xtra->time_index_copy_nvector);
 #endif // PARFLOW_HAVE_PSCTOOLKIT
 
   return(0);
@@ -242,6 +261,9 @@ int KINSolJacobianPrecFunction(void *current_state)
   Vector *pressure = StatePressureAux((State*)current_state);
 
   PFModule    *richards_jacobian_eval = StateJacEval(((State*)current_state));
+  // public_xtra needed for timing 
+  PublicXtra    *public_xtra = (PublicXtra*)PFModulePublicXtra(richards_jacobian_eval);
+
   Matrix      *J  = StateJac(((State*)current_state));
   Matrix      *JC = StateJacC(((State*)current_state));
   Vector      *old_pressure = StateOldPressure(((State*)current_state));
@@ -267,6 +289,7 @@ int KINSolJacobianPrecFunction(void *current_state)
     return -1;
   }
 
+  BeginTiming(public_xtra->time_index_copy_psblas_precon_sunmat);
   Set_SUNMatrix_From_SymmetricMatrix(B, J, JC, current_state);
 
   int ret_prec = SUNMatAsb_PSBLAS(B);
@@ -286,6 +309,8 @@ int KINSolJacobianPrecFunction(void *current_state)
 
   //  registering B
   int ret_set = SUNLinSolSetPreconditioner_PSBLAS(LS, B);
+  EndTiming(public_xtra->time_index_copy_psblas_precon_sunmat);
+
   if (ret_set != SUN_SUCCESS)
   {
     amps_Printf("Error in SUNLinSolSetPreconditioner_PSBLAS: %d\n", ret_set);
@@ -304,10 +329,15 @@ int KINSolJacobianFunction(N_Vector pf_n_pressure,
                            N_Vector pf_n_tmp1,
                            N_Vector pf_n_tmp2)
 {
-  Vector *pressure = StatePressureAux((State*)current_state);
-  Set_Vector_From_N_Vector(pressure, pf_n_pressure);
-
   PFModule    *richards_jacobian_eval = StateJacEval(((State*)current_state));
+    // public_xtra needed for timing 
+  PublicXtra    *public_xtra = (PublicXtra*)PFModulePublicXtra(richards_jacobian_eval);
+
+  Vector *pressure = StatePressureAux((State*)current_state);
+  BeginTiming(public_xtra->time_index_copy_nvector);
+  Set_Vector_From_N_Vector(pressure, pf_n_pressure);
+  EndTiming(public_xtra->time_index_copy_nvector);
+
   Matrix      *J = StateJac(((State*)current_state));
   Matrix      *JC = StateJacC(((State*)current_state));
   Vector      *old_pressure = StateOldPressure(((State*)current_state));
@@ -330,9 +360,12 @@ int KINSolJacobianFunction(N_Vector pf_n_pressure,
   StateJac(((State*)current_state)) = J;
   StateJacC(((State*)current_state)) = JC;
 
+  BeginTiming(public_xtra->time_index_copy_psblas_full_sunmat);
   Set_SUNMatrix_From_Matrix(Jacobian, J, JC, current_state);
-
+  
   int ret = SUNMatAsb_PSBLAS(Jacobian);
+  EndTiming(public_xtra->time_index_copy_psblas_full_sunmat);
+
   if(ret != 0)
   {
     amps_Printf("Error in SUNMatAsb_PSBLAS: %d\n", ret);
@@ -2636,6 +2669,13 @@ PFModule   *RichardsJacobianEvalNewPublicXtra(char *name)
     }
   }
   NA_FreeNameArray(switch_na);
+
+  #if defined (PARFLOW_HAVE_PSCTOOLKIT)
+  public_xtra->time_index_psctoolkit = RegisterTiming("PSCToolkit");
+  public_xtra->time_index_copy_psblas_precon_sunmat = RegisterTiming("PSBLAS_SUNMAT_PreCon_Copies");
+  public_xtra->time_index_copy_psblas_full_sunmat = RegisterTiming("PSBLAS_SUNMAT_FullSystemJacobian_Copies");
+  public_xtra->time_index_copy_nvector = RegisterTiming("PSBLAS_NVECTOR_Copies");
+  #endif  //PARFLOW_HAVE_PSCTOOLKIT
 
   PFModulePublicXtra(this_module) = public_xtra;
   return this_module;

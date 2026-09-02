@@ -476,7 +476,7 @@ void Set_SUNMatrix_From_SymmetricMatrix(SUNMatrix sunmat,
     psb_d_t *psb_val = ctalloc(psb_d_t, row_buf_size);
 
     int i = 0, j = 0, k = 0;
-    int idx = SubmatrixEltIndex(JB_sub, ix, iy, iz);  /* THE FIX */
+    int idx = SubmatrixEltIndex(JB_sub, ix, iy, iz);
     int psb_row_idx = SubgridEltIndex(user_subgrid, ix, iy, iz);
     int n_ins = 0;
 
@@ -572,7 +572,7 @@ void Set_SUNMatrix_From_SymmetricMatrix(SUNMatrix sunmat,
     psb_d_t *psb_val = ctalloc(psb_d_t, row_buf_size);
 
     int i = 0, j = 0, k = 0;
-    int idx = SubmatrixEltIndex(JC_sub, ix, iy, iz);  /* THE FIX */
+    int idx = SubmatrixEltIndex(JC_sub, ix, iy, iz);
     int n_ins = 0;
 
     BoxLoopI1(i, j, k, ix, iy, iz, nx, ny, 1,
